@@ -4,11 +4,11 @@
 
 
     function afficheAuteursSPIP($bdSPIP,$prefixeSPIP){
-         $requeteAfficheAut = $bdSPIP->prepare('SELECT id_auteur, nom, email, login, pass, en_ligne 
+         $requeteAfficheAut = $bdSPIP->prepare('SELECT id_auteur, nom, email, login, en_ligne 
                                                 FROM '.$prefixeSPIP.'auteurs 
                                                 WHERE statut != "5poubelle"');
-        $okAfficheAut = $requeteAfficheAut->execute() ;
-        $auteurs = $requeteAfficheAut->fetchAll(PDO::FETCH_OBJ)  ;
+        $okAfficheAut = $requeteAfficheAut->execute();
+        $auteurs = $requeteAfficheAut->fetchAll(PDO::FETCH_OBJ);
         return $auteurs;   
     }
 
@@ -16,19 +16,31 @@
         $requeteAfficheRub = $bdSPIP->prepare('SELECT id_rubrique, id_parent, titre, descriptif, texte, date, maj 
                                                FROM '.$prefixeSPIP.'rubriques');
         $okAfficheRub = $requeteAfficheRub->execute() ;
-        $rubriques = $requeteAfficheRub->fetchAll(PDO::FETCH_OBJ)  ;
+        $rubriques = $requeteAfficheRub->fetchAll(PDO::FETCH_OBJ);
         return $rubriques;         
     }
 
     function afficheArticlesSPIP($bdSPIP,$prefixeSPIP){
         $requeteAfficheArt = $bdSPIP->prepare('SELECT id_article, titre, id_rubrique, texte, date, visites, date_modif 
-                                               FROM '.$prefixeSPIP.'articles');
+                                               FROM '.$prefixeSPIP.'articles
+                                               WHERE statut != "refuse"');
         $okAfficheArt = $requeteAfficheArt->execute() ;
-        $articles = $requeteAfficheArt->fetchAll(PDO::FETCH_OBJ)  ;
+        $articles = $requeteAfficheArt->fetchAll(PDO::FETCH_OBJ);
         return $articles;         
     }
 
+    function afficheDocumentById($bdSPIP,$prefixeSPIP,$id_document){
+        $requeteAfficheDocumentById = $bdSPIP->prepare('SELECT d.fichier, d.extension
+                                                        FROM '.$prefixeSPIP.'documents d
+                                                        WHERE d.id_document = '.$id_document);
+        $okAfficheDocumentById = $requeteAfficheDocumentById->execute();
+        $document = $requeteAfficheDocumentById->fetchAll(PDO::FETCH_OBJ);
+        return $document;
+    }
+
     function formatSPIPtoJoomla($letexte){
+        
+        
         $debut_intertitre = "\n<h3 class=\"spip\">\n";
 	    $fin_intertitre = "</h3>\n";
         
@@ -43,27 +55,9 @@
         // en forme (paragraphes, raccourcis...)
         //
 
-        $letexte = "\n".trim($letexte);
-        
-        //
-        // Enlaces a urls [xxx->url]
-        // Note : complique car c'est ici qu'on applique typo(),
-        // et en plus on veut pouvoir les passer en pipeline
-        //
-
-        /*
-        $inserts = array();
-
-        if (preg_match_all(_RACCOURCI_LIEN, $letexte, $matches, PREG_SET_ORDER)) {
-            $i = 0;
-            foreach ($matches as $regs) {		
-                $inserts[++$i] = traiter_raccourci_lien($regs);
-                $letexte = str_replace($regs[0], "@@SPIP_ECHAPPE_LIEN_$i@@", $letexte);
-            }
-        }*/
+        $letexte = "\n".trim($letexte);      
         
         
-        /*
         //
 	   // Tableaux
 	   //
@@ -78,17 +72,18 @@
 	   $regs, PREG_SET_ORDER))
 	   foreach ($regs as $tab) {
 		  $letexte = str_replace($tab[1], traiter_tableau($tab[1]), $letexte);
-	   }*/
-        
-        
-        // les listes
-        /*if (ereg("\n-[*#]", $letexte))
-            $letexte = traiter_listes($letexte);*/
+	   }
 
-        // Puce
-        /*if (strpos($letexte, "\n- ") !== false)
-            $puce = definir_puce();
-        else $puce = '';*/
+       $inserts = array();
+
+        
+        if (preg_match_all(',\[([^][]*)->(>?)([^]]*)\],msS', $letexte, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $regs) {
+                $baliselien='<a href='.$regs[3].'>'.$regs[1].'</a>';
+                $letexte = str_replace($regs[0], $baliselien, $letexte);
+            }
+        }
+        
         
         // autres raccourcis
         $cherche1 = array(

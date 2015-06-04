@@ -581,10 +581,10 @@ function traiter_tableau($bloc) {
 		// - <caption> et summary dans la premiere ligne :
 		//   || caption | summary || (|summary est optionnel)
 			if (preg_match(',^\|\|([^|]*)(\|(.*))?$,sS', rtrim($ligne,'|'), $cap)) {
-				$l = 0;
+				/*$l = 0;
 				if ($caption = trim($cap[1]))
 					$debut_table .= "<caption>".$caption."</caption>\n";
-				$summary = ' summary="'.entites_html(trim($cap[3])).'"';
+				$summary = ' summary="'.entites_html(trim($cap[3])).'"';*/
 			}
 		// - <thead> sous la forme |{{titre}}|{{titre}}|
 		//   Attention thead oblige a avoir tbody
@@ -631,7 +631,14 @@ function traiter_tableau($bloc) {
 	// du nombre de colonnes dans la premiere ligne.
 	// Reperer egalement les colonnes numeriques pour les cadrer a droite
 	$rowspans = $numeric = array();
-	$n = count($lignes[0]);
+    
+    /*MODIFICATION BY Squareseidh*/
+    if(!empty($lignes[0])){
+	   $n = count($lignes[0]);
+    }else{
+        $n=0;
+    }
+    /**/
 	$k = count($lignes);
 	for($i=0;$i<$n;$i++) {
 	  $align = true;
@@ -663,7 +670,6 @@ function traiter_tableau($bloc) {
 		$ligne='';
 
 		for($c=count($cols)-1; $c>=0; $c--) {
-			$attr= $numeric[$c]; 
 			$cell = trim($cols[$c]);
 			if($cell=='<') {
 			  $colspan++;
@@ -676,10 +682,11 @@ function traiter_tableau($bloc) {
 				$attr .= " colspan='$colspan'";
 				$colspan=1;
 			  }
-			  if(($x=$rowspans[$l][$c])>1) {
+			  /*if(($x=$rowspans[$l][$c])>1) {
 				$attr.= " rowspan='$x'";
-			  }
-			  $ligne= "\n<td".$attr.'>'.$cols[$c].'</td>'.$ligne;
+			  }*/
+			  //$ligne= "\n<td".$attr.'>'.$cols[$c].'</td>'.$ligne;
+                $ligne= "\n<td".'>'.$cols[$c].'</td>'.$ligne; //MODIF BY SQUARESEIDH
 			}
 		}
 
@@ -959,5 +966,35 @@ function propre($t, $connect=null) {
 		echappe_retour_modeles(
 			traiter_raccourcis(
 				expanser_liens(echappe_html($t),$connect)),$interdire_script);
+}
+
+//
+// Inserer un lien a partir du preg_match du raccourci [xx->url]
+// $regs:
+// 0=>tout le raccourci
+// 1=>texte (ou texte|hreflang ou texte|bulle ou texte|bulle{hreflang})
+// 2=>double fleche (historiquement, liens ouvrants)
+// 3=>url
+//
+// http://doc.spip.org/@traiter_raccourci_lien
+function traiter_raccourci_lien($regs) {
+
+	$bulle = $hlang = '';
+	// title et hreflang donnes par le raccourci ?
+	if (preg_match(',^(.*?)([|]([^<>]*?))?([{]([a-z_]+)[}])?$,', $regs[3], $m)) {
+
+		$regs[1] = $m[1];
+	}
+
+	list ($lien, $class, $texte, $lang) = calculer_url($regs[3], $regs[1], 'tout');
+
+	// Si l'objet n'est pas de la langue courante, on ajoute hreflang
+	if (!$hlang AND $lang AND ($lang!=$GLOBALS['spip_lang'])) $hlang=$lang;
+	$hreflang = $hlang ? ' hreflang="'.$hlang.'"' : '';
+
+	# ici bien passer le lien pour traiter [<doc3>->url]
+	return typo("<a href=\"$lien\" class=\"$class\"$hreflang$bulle>"
+		. $texte
+		. "</a>");
 }
 ?>
