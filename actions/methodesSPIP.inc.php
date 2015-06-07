@@ -50,6 +50,10 @@
         $letexte = preg_replace(",<p[>[:space:]],iS", "\n\n\\0", $letexte);
         $letexte = preg_replace(",</p[>[:space:]],iS", "\\0\n\n", $letexte);
         
+        // les listes
+	   $letexte=preg_replace("/-/","\n-", $letexte);
+		
+        
         //
         // Ensemble de remplacements implementant le systeme de mise
         // en forme (paragraphes, raccourcis...)
@@ -73,8 +77,6 @@
 	   foreach ($regs as $tab) {
 		  $letexte = str_replace($tab[1], traiter_tableau($tab[1]), $letexte);
 	   }
-
-       $inserts = array();
 
         
         if (preg_match_all(',\[([^][]*)->(>?)([^]]*)\],msS', $letexte, $matches, PREG_SET_ORDER)) {

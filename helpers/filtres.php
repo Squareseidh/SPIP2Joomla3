@@ -3,150 +3,104 @@
 /***************************************************************************\
  *  SPIP, Systeme de publication pour l'internet                           *
  *                                                                         *
- *  Copyright (c) 2001-2009                                                *
+ *  Copyright (c) 2001-2014                                                *
  *  Arnaud Martin, Antoine Pitrou, Philippe Riviere, Emmanuel Saint-James  *
  *                                                                         *
  *  Ce programme est un logiciel libre distribue sous licence GNU/GPL.     *
  *  Pour plus de details voir le fichier COPYING.txt ou l'aide en ligne.   *
 \***************************************************************************/
 
-
-if (!defined("_ECRIRE_INC_VERSION")) return;
+if (!defined('_ECRIRE_INC_VERSION')) return;
 
 include_spip('inc/charsets');
 include_spip('inc/filtres_mini');
+include_spip('base/objets');
+include_spip('public/parametrer'); // charger les fichiers fonctions
 
-// http://doc.spip.org/@chercher_filtre
+/**
+ * Charger un filtre depuis le php :
+ * - on inclue tous les fichiers fonctions des plugins et du skel
+ * - on appelle chercher_filtre
+ *
+ * @param string $fonc
+ * @param string $default
+ * @return string
+ */
+function charger_filtre($fonc, $default='filtre_identite_dist') {
+	include_spip('public/parametrer'); // inclure les fichiers fonctions
+	return chercher_filtre($fonc, $default);
+}
+
+function filtre_identite_dist($texte){return $texte;}
+
+/**
+ * http://doc.spip.org/@chercher_filtre
+ *
+ * @param string $fonc
+ * @param null $default
+ * @return string
+ */
 function chercher_filtre($fonc, $default=NULL) {
-		foreach (
-		array('filtre_'.$fonc, 'filtre_'.$fonc.'_dist', $fonc) as $f)
-			if (function_exists($f)
-			OR (preg_match("/^(\w*)::(\w*)$/", $f, $regs)
-				AND is_callable(array($regs[1], $regs[2]))
-			)) {
-				return $f;
-			}
-		return $default;
-}
-
-// http://doc.spip.org/@appliquer_filtre
-function appliquer_filtre($arg, $filtre, $default=NULL) {
-	$f = chercher_filtre(preg_replace('/\W/','_', $filtre), $default);
-	return !$f ? '' : $f($arg);
-}
-
-// http://doc.spip.org/@filtre_text_txt_dist
-function filtre_text_txt_dist($t) {
-	return '<pre>' . echapper_tags($t) . '</pre>';
-}
-
-// http://doc.spip.org/@filtre_text_csv_dist
-function filtre_text_csv_dist($t)
-{
-	$virg = substr_count($t, ',');
-	$pvirg = substr_count($t, ';');
-	$tab = substr_count($t, "\t");
-	if ($virg > $pvirg)
-		{ $sep = ','; $hs = '&#44;';}
-	else	{ $sep = ';'; $hs = '&#59;'; $virg = $pvirg;}
-	if ($tab > $virg) {$sep = "\t"; $hs = "\t";}
-
-	$t = str_replace('""','&#34;',
-			 preg_replace('/\r?\n/', "\n",
-				      preg_replace('/[\r\n]+/', "\n", $t)));
-	preg_match_all('/"[^"]*"/', $t, $r);
-	foreach($r[0] as $cell) 
-		$t = str_replace($cell, 
-			str_replace($sep, $hs,
-				str_replace("\n", "<br />", 
-					    substr($cell,1,-1))),
-			$t);
-	list($entete, $corps) = preg_split(',\n,',$t,2);
-	$caption = '';
-	// sauter la ligne de tete formee seulement de separateurs 
-	if (substr_count($entete, $sep) == strlen($entete)) {
-		list($entete, $corps) = preg_split(',\n,',$corps,2);
+	if (!$fonc) return $default;
+	// Cas des types mime, sans confondre avec les appels de fonction de classe
+	// Foo::Bar
+	// qui peuvent etre avec un namespace : space\Foo::Bar
+	if (preg_match(',^[\w]+/,',$fonc)){
+		$nom = preg_replace(',\W,','_', $fonc);
+		$f = chercher_filtre($nom);
+		// cas du sous-type MIME sans filtre associe, passer au type:
+		// si filtre_text_plain pas defini, passe a filtre_text
+		if (!$f AND $nom!==$fonc)
+			$f = chercher_filtre(preg_replace(',\W.*$,','', $fonc));
+		return $f;
 	}
-	// si une seule colonne, en faire le titre
-	if (preg_match("/^([^$sep]+)$sep+\$/", $entete, $l)) {
-			$caption = "\n||" .  $l[1] . "|";
-			list($entete, $corps) = preg_split(',\n,',$corps,2);
-	}
-	// si premiere colonne vide, le raccourci doit quand meme produire <th...
-	if ($entete[0] == $sep) $entete = ' ' . $entete;
-
-	$lignes = preg_split(',\n,', $corps);
-	// retrait des lignes vides finales
-	while(preg_match("/^$sep*$/", $lignes[count($lignes)-1]))
-	  unset($lignes[count($lignes)-1]);
-	//  calcul du  nombre de colonne a chaque ligne
-	$nbcols = array();
-	$max = $mil = substr_count($entete, $sep);
-	foreach($lignes as $k=>$v) {
-	  if ($max <> ($nbcols[$k]= substr_count($v, $sep))) {
-	    if ($max > $nbcols[$k])
-	      $mil = $nbcols[$k];
-	    else { $mil = $max; $max = $nbcols[$k];}
-	  }
-	}
-	// Si pas le meme nombre, cadrer au nombre max
-	if ($mil <> $max)
-	  foreach($nbcols as $k=>$v) {
-	    if ($v < $max) $lignes[$k].= str_repeat($sep, $max-$v);
-	    }
-	// et retirer les colonnes integralement vides
-	while(true) {
-	  $nbcols =  ($entete[strlen($entete)-1]===$sep);
-	  foreach($lignes as $v) $nbcols &= ($v[strlen($v)-1]===$sep);
-	  if (!$nbcols) break;
-	  $entete = substr($entete,0,-1);
-	  foreach($lignes as $k=>$v) $lignes[$k] = substr($v,0,-1);
-	}
-	$corps = join("\n", $lignes) . "\n";
-	return propre($caption .
-		"\n|{{" .
-		str_replace($sep,'}}|{{',$entete) .
-		"}}|" .
-		"\n|" .
-		str_replace($sep,'|',str_replace("\n", "|\n|",$corps)));
-}
-
-// Incrustation de HTML, si on est capable de le securiser
-// sinon, afficher le source
-// http://doc.spip.org/@filtre_text_html_dist
-function filtre_text_html_dist($t)
-{
-	if (!preg_match(',^(.*?)<body[^>]*>(.*)</body>,is', $t, $r))
-		return filtre_text_txt_dist($t);
-
-	list(,$h,$t) = $r;
-
-	$style = '';
-	// recuperer les styles internes
-	if (preg_match_all(',<style>(.*?)</style>,is', $h, $r, PREG_PATTERN_ORDER))
-		$style =  join("\n",$r[1]);
-	// ... et externes
-
-	if (preg_match_all(',<link[^>]+type=.text/css[^>]*>,is', $h, $r, PREG_PATTERN_ORDER))
-		foreach($r[0] as $l) {
-			preg_match("/href='([^']*)'/", str_replace('"',"'",$l), $m);
-			$style .= "\n/* $l */\n"
-			. str_replace('<','',recuperer_page($m[1]));
+	foreach (
+	array('filtre_'.$fonc, 'filtre_'.$fonc.'_dist', $fonc) as $f){
+		if (isset( $GLOBALS['spip_matrice'][$f]) AND is_string($g = $GLOBALS['spip_matrice'][$f]))
+			find_in_path($g,'', true);
+		if (function_exists($f)
+		OR (preg_match("/^(\w*)::(\w*)$/", $f, $regs)
+			AND is_callable(array($regs[1], $regs[2]))
+		)) {
+			return $f;
 		}
-	// Pourquoi SafeHtml transforme-t-il en texte les scripts dans Body ?
-	$t = safehtml(preg_replace(',<script.*?</script>,is','',$t));
-	return (!$style ? '' : "\n<style>$style</style>") . $t;
+	}
+	return $default;
 }
 
-// http://doc.spip.org/@filtre_audio_x_pn_realaudio
-function filtre_audio_x_pn_realaudio($id)
-{
-  return "
-	<param name='controls' value='PositionSlider' />
-	<param name='controls' value='ImageWindow' />
-	<param name='controls' value='PlayButton' />
-	<param name='console' value='Console$id' />
-	<param name='nojava' value='true' />";
+/**
+ * Applique un filtre
+ * 
+ * Fonction générique qui prend en argument l’objet (texte, etc) à modifier
+ * et le nom du filtre. Retrouve les arguments du filtre demandé dans les arguments
+ * transmis à cette fonction, via func_get_args().
+ *
+ * @see filtrer() Assez proche
+ * 
+ * @param string $arg
+ *     Texte sur lequel appliquer le filtre
+ * @param string $filtre
+ *     Nom du filtre a appliquer
+ * @param string $force
+ *     La fonction doit-elle retourner le texte ou rien ?
+ * @return string
+ *     Texte avec le filtre appliqué s'il a été trouvé,
+ *     Texte sans le filtre appliqué s'il n'a pas été trouvé et que $force n'a
+ *       pas été fourni,
+ *     Chaîne vide si le filtre n'a pas été trouvé et que $force a été fourni.
+**/
+function appliquer_filtre($arg, $filtre, $force=NULL) {
+	$f = chercher_filtre($filtre);
+	if (!$f) {
+		if (!$force) return '';
+		else return $arg;
+	}
+
+	$args = func_get_args();
+	array_shift($args); // enlever $arg
+	array_shift($args); // enlever $filtre
+	array_unshift($args, $arg); // remettre $arg
+	return call_user_func_array($f,$args);
 }
 
 // http://doc.spip.org/@spip_version
@@ -188,55 +142,38 @@ function version_svn_courante($dir) {
 	return 0;
 }
 
-//
-// Fonctions graphiques
-//
 // La matrice est necessaire pour ne filtrer _que_ des fonctions definies dans filtres_images
 // et laisser passer les fonctions personnelles baptisees image_...
-$GLOBALS['spip_matrice']['image_valeurs_trans'] = true;
-$GLOBALS['spip_matrice']['image_graver'] = true;
-$GLOBALS['spip_matrice']['image_reduire'] = true;
-$GLOBALS['spip_matrice']['image_reduire_par'] = true;
-$GLOBALS['spip_matrice']['image_recadre'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_alpha'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_flip_vertical'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_flip_horizontal'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_masque'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_nb'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_flou'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_RotateBicubic'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_rotation'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_distance_pixel'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_decal_couleur'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_gamma'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_decal_couleur_127'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_sepia'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_aplatir'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_format'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_couleur_extraire'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_select'] = true;
-$GLOBALS['spip_matrice']['image_renforcement'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_imagick'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['image_ramasse_miettes'] = true;
-$GLOBALS['spip_matrice']['image_passe_partout'] = true;
+$GLOBALS['spip_matrice']['image_graver'] = true;//'inc/filtres_images_mini.php';
+$GLOBALS['spip_matrice']['image_select'] = true;//'inc/filtres_images_mini.php';
+$GLOBALS['spip_matrice']['image_reduire'] = true;//'inc/filtres_images_mini.php';
+$GLOBALS['spip_matrice']['image_reduire_par'] = true;//'inc/filtres_images_mini.php';
+$GLOBALS['spip_matrice']['image_passe_partout'] = true;//'inc/filtres_images_mini.php';
 
-$GLOBALS['spip_matrice']['couleur_dec_to_hex'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['couleur_hex_to_dec'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['couleur_extreme'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['couleur_inverser'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['couleur_eclaircir'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['couleur_foncer'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['couleur_foncer_si_claire'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['couleur_eclaircir_si_foncee'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['couleur_saturation'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['couleur_web'] = 'inc/filtres_images.php';
-$GLOBALS['spip_matrice']['couleur_4096'] = 'inc/filtres_images.php';
+$GLOBALS['spip_matrice']['couleur_html_to_hex'] = 'inc/filtres_images_mini.php';
+$GLOBALS['spip_matrice']['couleur_foncer'] = 'inc/filtres_images_mini.php';
+$GLOBALS['spip_matrice']['couleur_eclaircir'] = 'inc/filtres_images_mini.php';
+
+// ou pour inclure un script au moment ou l'on cherche le filtre
+$GLOBALS['spip_matrice']['filtre_image_dist'] = 'inc/filtres_mime.php';
+$GLOBALS['spip_matrice']['filtre_audio_dist'] = 'inc/filtres_mime.php';
+$GLOBALS['spip_matrice']['filtre_video_dist'] = 'inc/filtres_mime.php';
+$GLOBALS['spip_matrice']['filtre_application_dist'] = 'inc/filtres_mime.php';
+$GLOBALS['spip_matrice']['filtre_message_dist'] = 'inc/filtres_mime.php';
+$GLOBALS['spip_matrice']['filtre_multipart_dist'] = 'inc/filtres_mime.php';
+$GLOBALS['spip_matrice']['filtre_text_dist'] = 'inc/filtres_mime.php';
+$GLOBALS['spip_matrice']['filtre_text_csv_dist'] = 'inc/filtres_mime.php';
+$GLOBALS['spip_matrice']['filtre_text_html_dist'] = 'inc/filtres_mime.php';
+$GLOBALS['spip_matrice']['filtre_audio_x_pn_realaudio'] = 'inc/filtres_mime.php';
+
 
 // charge les fonctions graphiques et applique celle demandee
 // http://doc.spip.org/@filtrer
 function filtrer($filtre) {
-	if (is_string($f = $GLOBALS['spip_matrice'][$filtre]))
+	if (isset($GLOBALS['spip_matrice'][$filtre]) and is_string($f = $GLOBALS['spip_matrice'][$filtre])){
 		find_in_path($f,'', true);
+		$GLOBALS['spip_matrice'][$filtre] = true;
+	}
 	$tous = func_get_args();
 	if (substr($filtre,0,6)=='image_' && $GLOBALS['spip_matrice'][$filtre])
 		return image_filtrer($tous);
@@ -246,9 +183,44 @@ function filtrer($filtre) {
 	}
 	else {
 		// le filtre n'existe pas, on provoque une erreur
-		erreur_squelette(texte_script(_T('zbug_erreur_filtre', array('filtre'=>$filtre))),'');
+		$msg = array('zbug_erreur_filtre', array('filtre'=>texte_script($filtre)));
+		erreur_squelette($msg);
+		return '';
 	}
 }
+
+/*
+ *
+ * [(#CALCUL|set{toto})] enregistre le résultat de #CALCUL
+ *           dans la variable toto et renvoie vide
+ *
+ * [(#CALCUL|set{toto,1})] enregistre le résultat de #CALCUL
+ *           dans la variable toto et renvoie la valeur
+ *
+ */
+function filtre_set(&$Pile, $val, $key, $continue = null) {
+	$Pile['vars'][$key] = $val;
+	return $continue ? $val : '';
+}
+
+/*
+ * [(#TRUC|debug{avant}|calcul|debug{apres}|etc)] affiche
+ *   la valeur de #TRUC avant et après le calcul
+ */
+function filtre_debug($val, $key=null) {
+	$debug = (
+		is_null($key) ? '' :  (var_export($key,true)." = ")
+	) . var_export($val, true);
+
+	include_spip('inc/autoriser');
+	if (autoriser('webmestre'))
+		echo "<div class='spip_debug'>\n",$debug,"</div>\n";
+
+	spip_log($debug, 'debug');
+
+	return $val;
+}
+
 
 // fonction generique d'entree des filtres images
 // accepte en entree un texte complet, un img-log (produit par #LOGO_XX),
@@ -266,7 +238,10 @@ function image_filtrer($args){
 	// Cas du nom de fichier local
 	if ( strpos(substr($texte,strlen(_DIR_RACINE)),'..')===FALSE
 	AND !preg_match(',^/|[<>]|\s,S', $texte)
-	AND file_exists(preg_replace(',[?].*$,','',$texte))) {
+	AND (
+		file_exists(preg_replace(',[?].*$,','',$texte))
+		OR preg_match(';^(\w{3,7}://);', $texte) 
+		)) {
 		array_unshift($args,"<img src='$texte' />");
 		$res = call_user_func_array($filtre, $args);
 		statut_effacer_images_temporaires(false); // desactiver pour les appels hors compilo
@@ -314,40 +289,6 @@ function image_filtrer($args){
 	return $texte;
 }
 
-// pour les feuilles de style
-function image_bg ($img, $couleur, $pos="") {
-	if (!function_exists("imagecreatetruecolor")
-		OR !($image = image_aplatir(image_sepia($img, $couleur),"gif","cccccc", 64, true))
-	)
-		return $couleur ? "background-color: #$couleur;" : '';
-	include_spip('inc/filtres_images_etendus');
-	return "background: url(".url_absolue(extraire_attribut($image, "src")).") $pos;";
-}
-
-// Pour assurer la compatibilite avec les anciens nom des filtres image_xxx
-// commencent par "image_"
-// http://doc.spip.org/@reduire_image
-function reduire_image($texte, $taille = -1, $taille_y = -1) {
-	return filtrer('image_graver',
-		filtrer('image_reduire',$texte, $taille, $taille_y)
-	);
-}
-// http://doc.spip.org/@valeurs_image_trans
-function valeurs_image_trans($img, $effet, $forcer_format = false) {
-	include_spip('inc/filtres_images');
-	return image_valeurs_trans($img, $effet, $forcer_format = false);
-}
-// http://doc.spip.org/@couleur_extraire
-function couleur_extraire($img, $x=10, $y=6) {
-	return filtrer('image_couleur_extraire',$img, $x, $y);
-}
-// http://doc.spip.org/@image_typo
-function image_typo() {
-	include_spip('inc/filtres_images');
-	$tous = func_get_args();
-	return call_user_func_array('produire_image_typo', $tous);
-}
-
 //
 // Retourner taille d'une image
 // pour les filtres |largeur et |hauteur
@@ -383,7 +324,8 @@ function taille_image($img) {
 	if (isset($hauteur_img[$logo]))
 		$srcHeight = $hauteur_img[$logo];
 	if (!$srcWidth OR !$srcHeight){
-		if ($srcsize = @getimagesize($logo)){
+		if (file_exists($logo)
+			AND $srcsize = @getimagesize($logo)){
 			if (!$srcWidth)	$largeur_img[$logo] = $srcWidth = $srcsize[0];
 			if (!$srcHeight)	$hauteur_img[$logo] = $srcHeight = $srcsize[1];
 		}
@@ -392,8 +334,8 @@ function taille_image($img) {
 		elseif(@file_exists($f = "$logo.src")
 		  AND lire_fichier($f,$valeurs)
 		  AND $valeurs=unserialize($valeurs)) {
-			if (!$srcWidth)	$largeur_img[$mem] = $srcWidth = $valeurs["largeur_dest"];
-			if (!$srcHeight)	$hauteur_img[$mem] = $srcHeight = $valeurs["hauteur_dest"];
+			if (!$srcWidth)	$largeur_img[$logo] = $srcWidth = $valeurs["largeur_dest"];
+			if (!$srcHeight)	$hauteur_img[$logo] = $srcHeight = $valeurs["hauteur_dest"];
 	  }
 	}
 	return array($srcHeight, $srcWidth);
@@ -437,22 +379,30 @@ function proteger_amp($texte){
 	return str_replace('&','&amp;',$texte);
 }
 
-// http://doc.spip.org/@entites_html
-function entites_html($texte) {
-	return corriger_entites_html(htmlspecialchars($texte));
-}
-
-/*
-// http://doc.spip.org/@entites_html
-function entites_html($texte, $tout=false) {
-	if (!is_string($texte) OR !$texte) return $texte;
+//
+/**
+ * http://doc.spip.org/@entites_html
+ *
+ * @param string $texte
+ *   chaine a echapper
+ * @param bool $tout
+ *   corriger toutes les &amp;xx; en &xx;
+ * @param bool $quote
+ *   echapper aussi les simples quotes en &#039;
+ * @return mixed|string
+ */
+function entites_html($texte, $tout=false, $quote=true) {
+	if (!is_string($texte) OR !$texte
+	OR strpbrk($texte, "&\"'<>")==false
+	) return $texte;
 	include_spip('inc/texte');
-	$texte = htmlspecialchars(echappe_retour(echappe_html($texte,'',true),'','proteger_amp'));
+	$flags = !defined('PHP_VERSION_ID') OR PHP_VERSION_ID < 50400 ? ENT_COMPAT : ENT_COMPAT|ENT_HTML401;
+	$texte = spip_htmlspecialchars(echappe_retour(echappe_html($texte, '', true), '', 'proteger_amp'), $quote?ENT_QUOTES:$flags);
 	if ($tout)
 		return corriger_toutes_entites_html($texte);
 	else
 		return corriger_entites_html($texte);
-}*/
+}
 
 // Transformer les &eacute; dans le charset local
 // http://doc.spip.org/@filtrer_entites
@@ -461,28 +411,45 @@ function filtrer_entites($texte) {
 	// filtrer
 	$texte = html2unicode($texte);
 	// remettre le tout dans le charset cible
-	return unicode2charset($texte);
+	$texte = unicode2charset($texte);
+	// cas particulier des " et ' qu'il faut filtrer aussi
+	// (on le faisait deja avec un &quot;)
+	if (strpos($texte,"&#")!==false)
+		$texte = str_replace(array("&#039;","&#39;","&#034;","&#34;"), array("'","'",'"','"'), $texte);
+	return $texte;
 }
 
 // caracteres de controle - http://www.w3.org/TR/REC-xml/#charsets
 // http://doc.spip.org/@supprimer_caracteres_illegaux
 function supprimer_caracteres_illegaux($texte) {
-	$from = "\x0\x1\x2\x3\x4\x5\x6\x7\x8\xB\xC\xE\xF\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F";
-	$to = str_repeat('-', strlen($from));
+	static $from = "\x0\x1\x2\x3\x4\x5\x6\x7\x8\xB\xC\xE\xF\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F";
+	static $to = null;
+	
+	if (is_array($texte)) {
+		return array_map('corriger_caracteres_windows', $texte);
+	}
+	
+	if (!$to) $to = str_repeat('-', strlen($from));
 	return strtr($texte, $from, $to);
 }
 
 // Supprimer caracteres windows et les caracteres de controle ILLEGAUX
 // http://doc.spip.org/@corriger_caracteres
 function corriger_caracteres ($texte) {
-	include_spip('inc/charsets');
 	$texte = corriger_caracteres_windows($texte);
 	$texte = supprimer_caracteres_illegaux($texte);
 	return $texte;
 }
 
-// Encode du HTML pour transmission XML
-// http://doc.spip.org/@texte_backend
+/**
+ * Encode du HTML pour transmission XML
+ * notamment dans les flux RSS
+ *
+ * http://doc.spip.org/@texte_backend
+ *
+ * @param $texte
+ * @return mixed
+ */
 function texte_backend($texte) {
 
 	static $apostrophe = array("&#8217;", "'"); # n'allouer qu'une fois
@@ -500,7 +467,10 @@ function texte_backend($texte) {
 	$u = $GLOBALS['meta']['pcre_u'];
 	$texte = str_replace("&nbsp;", " ", $texte);
 	$texte = preg_replace('/\s{2,}/S'.$u, " ", $texte);
-	$texte = entites_html($texte);
+	// ne pas echapper les sinqle quotes car certains outils de syndication gerent mal
+	$texte = entites_html($texte, false, false);
+	// mais bien echapper les double quotes !
+	$texte = str_replace('"','&#034;',$texte);
 
 	// verifier le charset
 	$texte = charset2unicode($texte);
@@ -538,7 +508,7 @@ function recuperer_numero($texte) {
 	if (preg_match(
 	",^[[:space:]]*([0-9]+)([.)]|".chr(194).'?'.chr(176).")[[:space:]]+,S",
 	$texte, $regs))
-		return intval($regs[1]);
+		return strval($regs[1]);
 	else
 		return '';
 }
@@ -579,8 +549,31 @@ function textebrut($texte) {
 // Remplace les liens SPIP en liens ouvrant dans une nouvelle fenetre (target=blank)
 // http://doc.spip.org/@liens_ouvrants
 function liens_ouvrants ($texte) {
-	return preg_replace(",<a ([^>]*https?://[^>]*class=[\"']spip_(out|url)\b[^>]+)>,",
+	return preg_replace(",<a\s+([^>]*https?://[^>]*class=[\"']spip_(out|url)\b[^>]+)>,",
 		"<a \\1 target=\"_blank\">", $texte);
+}
+
+/**
+ * Ajouter un attribut rel="nofollow" sur tous les liens d'un texte
+ * @param string $texte
+ * @return string
+ */
+function liens_nofollow($texte) {
+	if (stripos($texte,"<a")===false)
+		return $texte;
+
+	if (preg_match_all(",<a\b[^>]*>,UimsS",$texte, $regs, PREG_PATTERN_ORDER)){
+		foreach($regs[0] as $a){
+			$rel = extraire_attribut($a,"rel");
+			if (strpos($rel,"nofollow")===false){
+				$rel = "nofollow" . ($rel?" $rel":"");
+				$anofollow = inserer_attribut($a,"rel",$rel);
+				$texte = str_replace($a,$anofollow,$texte);
+			}
+		}
+	}
+
+	return $texte;
 }
 
 // Transformer les sauts de paragraphe en simples passages a la ligne
@@ -593,37 +586,29 @@ function PtoBR($texte){
 	return $texte;
 }
 
-// Couper les "mots" de plus de $l caracteres (souvent des URLs)
-// http://doc.spip.org/@lignes_longues
-function lignes_longues($texte, $l = 70) {
-	// Passer en utf-8 pour ne pas avoir de coupes trop courtes avec les &#xxxx;
-	// qui prennent 7 caracteres
-	#include_spip('inc/charsets');
-	$texte = unicode_to_utf_8(charset2unicode(
-		$texte, $GLOBALS['meta']['charset'], true));
 
-	// echapper les tags (on ne veut pas casser les a href=...)
-	$tags = array();
-	if (preg_match_all('/<.*>/UumsS', $texte, $t, PREG_SET_ORDER)) {
-		foreach ($t as $n => $tag) {
-			$tags[$n] = $tag[0];
-			$texte = str_replace($tag[0], " @@SPIPTAG$n@@ ", $texte);
-		}
-	}
-	// casser les mots longs qui restent
-	// note : on pourrait preferer couper sur les / , etc.
-	if (preg_match_all("/[\w,\/.]{".$l."}/UmsS", $texte, $longs, PREG_SET_ORDER)) {
-		foreach ($longs as $long) {
-			$texte = str_replace($long[0], $long[0].' ', $texte);
-		}
-	}
+/**
+ * lignes_longues assure qu'un texte ne vas pas deborder d'un bloc
+ * par la faute d'un mot trop long (souvent des URLs)
+ * Ne devrait plus etre utilise et fait directement en CSS par un style
+ * word-wrap:break-word;
+ * cf http://www.alsacreations.com/tuto/lire/1038-gerer-debordement-contenu-css.html
+ *
+ * Pour assurer la compatibilite du filtre, on encapsule le contenu par
+ * un div ou span portant ce style inline.
+ *
+ * http://doc.spip.org/@lignes_longues
+ *
+ * @param string $texte
+ * @return string
+ */
+function lignes_longues($texte) {
+	if (!strlen(trim($texte))) return $texte;
+	include_spip('inc/texte');
+	$tag = preg_match(',</?('._BALISES_BLOCS.')[>[:space:]],iS', $texte) ?
+		'div' : 'span';
 
-	// retablir les tags
-	foreach ($tags as $n=>$tag) {
-		$texte = str_replace(" @@SPIPTAG$n@@ ", $tag, $texte);
-	}
-
-	return importer_charset($texte, 'utf-8');
+	return "<$tag style='word-wrap:break-word;'>$texte</$tag>";
 }
 
 // Majuscules y compris accents, en HTML
@@ -652,11 +637,14 @@ function majuscules($texte) {
 // "127.4 ko" ou "3.1 Mo"
 // http://doc.spip.org/@taille_en_octets
 function taille_en_octets ($taille) {
+	if ($taille < 1) return '';
 	if ($taille < 1024) {$taille = _T('taille_octets', array('taille' => $taille));}
 	else if ($taille < 1024*1024) {
-		$taille = _T('taille_ko', array('taille' => ((floor($taille / 102.4))/10)));
+		$taille = _T('taille_ko', array('taille' => round($taille/1024, 1)));
+	} else if ($taille < 1024*1024*1024) {
+		$taille = _T('taille_mo', array('taille' => round($taille/1024/1024, 1)));
 	} else {
-		$taille = _T('taille_mo', array('taille' => ((floor(($taille / 1024) / 102.4))/10)));
+		$taille = _T('taille_go', array('taille' => round($taille/1024/1024/1024, 2)));
 	}
 	return $taille;
 }
@@ -664,10 +652,12 @@ function taille_en_octets ($taille) {
 
 // Rend une chaine utilisable sans dommage comme attribut HTML
 // http://doc.spip.org/@attribut_html
-function attribut_html($texte) {
+function attribut_html($texte,$textebrut = true) {
 	$u = $GLOBALS['meta']['pcre_u'];
-	$texte = texte_backend(preg_replace(array(",\n,",",\s(?=\s),msS".$u),array(" ",""),textebrut($texte)));
-	$texte = str_replace(array("'",'"'),array('&#39;', '&#34;'), $texte);
+	if ($textebrut)
+		$texte = preg_replace(array(",\n,",",\s(?=\s),msS".$u),array(" ",""),textebrut($texte));
+	$texte = texte_backend($texte);
+	$texte = str_replace(array("'",'"'),array('&#039;', '&#034;'), $texte);
 	
 	return preg_replace(array("/&(amp;|#38;)/","/&(?![A-Za-z]{0,4}\w{2,3};|#[0-9]{2,5};)/"),array("&","&#38;") , $texte);
 }
@@ -678,14 +668,9 @@ function attribut_html($texte) {
 function vider_url($url, $entites = true) {
 	# un message pour abs_url
 	$GLOBALS['mode_abs_url'] = 'url';
-
 	$url = trim($url);
-	if (preg_match(",^(http:?/?/?|mailto:?)$,iS", $url))
-		return '';
-
-	if ($entites) $url = entites_html($url);
-
-	return $url;
+	$r = ",^(?:" . _PROTOCOLES_STD . '):?/?/?$,iS';
+	return preg_match($r, $url) ? '': ($entites ? entites_html($url) : $url);
 }
 
 // Extraire une date de n'importe quel champ (a completer...)
@@ -712,12 +697,25 @@ function securiser_acces($id_auteur, $cle, $dir, $op='', $args='')
 	return verifier_low_sec($id_auteur, $cle, $dir);
 }
 
-// sinon{texte, rien} : affiche "rien" si la chaine est vide,
-// affiche la chaine si non vide ;
-// attention c'est compile directement dans inc/references
-// http://doc.spip.org/@sinon
+/**
+ * La fonction sinon retourne le second parametre lorsque
+ * le premier est considere vide, sinon retourne le premier parametre.
+ *
+ * En php sinon($a, 'rien') retourne $a ou 'rien' si $a est vide.
+ * En filtre spip |sinon{#TEXTE, rien} : affiche #TEXTE ou "rien" si #TEXTE est vide,
+ *
+ * Note : l'utilisation de |sinon en tant que filtre de squelette
+ * est directement compile dans public/references par la fonction filtre_logique()
+ * 
+ * @param mixed $texte
+ * 		Contenu de reference a tester
+ * @param mixed $sinon
+ * 		Contenu a retourner si le contenu de reference est vide
+ * @return mixed
+ * 		Retourne $texte, sinon $sinon.
+**/
 function sinon ($texte, $sinon='') {
-	if (strlen($texte))
+	if ($texte OR (!is_array($texte) AND strlen($texte)))
 		return $texte;
 	else
 		return $sinon;
@@ -740,18 +738,22 @@ function choixsiegal($a1,$a2,$v,$f) {
 // Date, heure, saisons
 //
 
+// on normalise la date, si elle vient du contexte (public/parametrer.php), on force le jour
 // http://doc.spip.org/@normaliser_date
-function normaliser_date($date) {
+function normaliser_date($date, $forcer_jour = false) {
 	$date = vider_date($date);
 	if ($date) {
 		if (preg_match("/^[0-9]{8,10}$/", $date))
 			$date = date("Y-m-d H:i:s", $date);
 		if (preg_match("#^([12][0-9]{3})([-/]00)?( [-0-9:]+)?$#", $date, $regs))
-			$date = $regs[1]."-01-01".$regs[3];
+			$date = $regs[1]."-00-00".$regs[3];
 		else if (preg_match("#^([12][0-9]{3}[-/][01]?[0-9])([-/]00)?( [-0-9:]+)?$#", $date, $regs))
-			$date = preg_replace("@/@","-",$regs[1])."-01".$regs[3];
+			$date = preg_replace("@/@","-",$regs[1])."-00".$regs[3];
 		else
 			$date = date("Y-m-d H:i:s", strtotime($date));
+
+		if ($forcer_jour)
+			$date = str_replace('-00', '-01', $date);
 	}
 	return $date;
 }
@@ -805,7 +807,7 @@ function heures_minutes($numdate) {
 }
 
 // http://doc.spip.org/@recup_date
-function recup_date($numdate){
+function recup_date($numdate, $forcer_jour = true){
 	if (!$numdate) return '';
 	$heures = $minutes = $secondes = 0;
 	if (preg_match('#([0-9]{1,2})/([0-9]{1,2})/([0-9]{4}|[0-9]{1,2})#', $numdate, $regs)) {
@@ -843,6 +845,8 @@ function recup_date($numdate){
 	if ($annee > 4000) $annee -= 9000;
 	if (substr($jour, 0, 1) == '0') $jour = substr($jour, 1);
 
+	if ($forcer_jour AND $jour == '0') $jour = '1';
+	if ($forcer_jour AND $mois == '0') $mois = '1';
 	if ($annee OR $mois OR $jour OR $heures OR $minutes OR $secondes)
 		return array($annee, $mois, $jour, $heures, $minutes, $secondes);
 }
@@ -858,10 +862,15 @@ function date_interface($date, $decalage_maxi = 43200/* 12*3600 */) {
 }
 
 // http://doc.spip.org/@date_relative
-function date_relative($date, $decalage_maxi=0) {
+function date_relative($date, $decalage_maxi=0,$ref_date=null) {
+	
+	if (is_null($ref_date))
+		$ref_time = time();
+	else
+		$ref_time = strtotime($ref_date);
 	
 	if (!$date) return;
-	$decal = date("U") - date("U", strtotime($date));
+	$decal = date("U",$ref_time) - date("U", strtotime($date));
 
 	if ($decalage_maxi AND ($decal > $decalage_maxi OR $decal < 0))
 		return '';
@@ -872,34 +881,53 @@ function date_relative($date, $decalage_maxi=0) {
 	} else {
 		$il_y_a = "date_il_y_a";
 	}
-	
-	if ($decal < 3600) {
-		$minutes = ceil($decal / 60);
-		$retour = _T($il_y_a, array("delai"=>"$minutes "._T("date_minutes"))); 
+
+	if ($decal > 3600 * 24 * 30 * 6)
+		return affdate_court($date);
+
+	if ($decal > 3600 * 24 * 30) {
+		$mois = floor ($decal / (3600 * 24 * 30));
+		if ($mois < 2)
+			$delai = "$mois "._T("date_un_mois");
+		else
+			$delai = "$mois "._T("date_mois");
 	}
-	else if ($decal < (3600 * 24) ) {
-		$heures = ceil ($decal / 3600);
-		$retour = _T($il_y_a, array("delai"=>"$heures "._T("date_heures"))); 
+	else if ($decal > 3600 * 24 * 7) {
+		$semaines = floor ($decal / (3600 * 24 * 7));
+		if ($semaines < 2)
+			$delai = "$semaines "._T("date_une_semaine");
+		else
+			$delai = "$semaines "._T("date_semaines");
 	}
-	else if ($decal < (3600 * 24 * 7)) {
-		$jours = ceil ($decal / (3600 * 24));
-		$retour = _T($il_y_a, array("delai"=>"$jours "._T("date_jours"))); 
+	else if ($decal > 3600 * 24) {
+		$jours = floor ($decal / (3600 * 24));
+		if ($jours < 2)
+			return $il_y_a=="date_dans"?_T("date_demain"):_T("date_hier");
+		else
+			$delai = "$jours "._T("date_jours");
 	}
-	else if ($decal < (3600 * 24 * 7 * 4)) {
-		$semaines = ceil ($decal / (3600 * 24 * 7));
-		$retour = _T($il_y_a, array("delai"=>"$semaines "._T("date_semaines"))); 
+	else if ($decal >= 3600) {
+		$heures = floor ($decal / 3600);
+		if ($heures < 2)
+			$delai = "$heures "._T("date_une_heure");
+		else
+			$delai = "$heures "._T("date_heures");
 	}
-	else if ($decal < (3600 * 24 * 30 * 6)) {
-		$mois = ceil ($decal / (3600 * 24 * 30));
-		$retour = _T($il_y_a, array("delai"=>"$mois "._T("date_mois"))); 
-	}
-	else {
-		$retour = affdate_court($date);
+	else if ($decal >= 60) {
+		$minutes = floor($decal / 60);
+		if ($minutes < 2)
+			$delai = "$minutes "._T("date_une_minute");
+		else
+			$delai = "$minutes "._T("date_minutes");
+	} else {
+		$secondes = ceil($decal);
+		if ($secondes < 2)
+			$delai = "$secondes "._T("date_une_seconde");
+		else
+			$delai = "$secondes "._T("date_secondes");
 	}
 
-
-
-	return $retour;
+	return _T($il_y_a, array("delai"=> $delai));
 }
 
 
@@ -933,10 +961,21 @@ function date_relativecourt($date, $decalage_maxi=0) {
 	return $retour;
 }
 
-// http://doc.spip.org/@affdate_base
-function affdate_base($numdate, $vue, $param = '') { 
-	global $spip_lang;
-	$date_array = recup_date($numdate);
+/**
+ * Formatage humain de la date $numdate selon le format $vue
+ * http://doc.spip.org/@affdate_base
+ *
+ * @param $numdate
+ * @param $vue
+ * @param array $options
+ *   param : 'abbr' ou 'initiale' permet d'afficher les jours au format court ou initiale
+ *   annee_courante : permet de definir l'annee de reference pour l'affichage des dates courtes
+ * @return mixed|string
+ */
+function affdate_base($numdate, $vue, $options = array()) {
+	if (is_string($options))
+		$options = array('param'=>$options);
+	$date_array = recup_date($numdate, false);
 	if (!$date_array) return;
 	list($annee, $mois, $jour, $heures, $minutes, $secondes)= $date_array;
 
@@ -968,6 +1007,8 @@ function affdate_base($numdate, $vue, $param = '') {
 
 	switch ($vue) {
 	case 'saison':
+	case 'saison_annee':
+		$saison = '';
 		if ($mois > 0){
 			$saison = 1;
 			if (($mois == 3 AND $jour >= 21) OR $mois > 3) $saison = 2;
@@ -975,18 +1016,21 @@ function affdate_base($numdate, $vue, $param = '') {
 			if (($mois == 9 AND $jour >= 21) OR $mois > 9) $saison = 4;
 			if (($mois == 12 AND $jour >= 21) OR $mois > 12) $saison = 1;
 		}
-		return _T('date_saison_'.$saison);
+		if($vue == 'saison')
+			return $saison?_T('date_saison_'.$saison):'';
+		else
+			return $saison?trim(_T('date_fmt_saison_annee', array('saison'=>_T('date_saison_'.$saison), 'annee'=>$annee))) :'';
 
 	case 'court':
 		if ($avjc) return $annee;
-		$a = date('Y');
+		$a = ((isset($options['annee_courante']) AND $options['annee_courante'])?$options['annee_courante']:date('Y'));
 		if ($annee < ($a - 100) OR $annee > ($a + 100)) return $annee;
-		if ($annee != $a) return _T('date_fmt_mois_annee', array ('mois'=>$mois, 'nommois'=>ucfirst($nommois), 'annee'=>$annee));
+		if ($annee != $a) return _T('date_fmt_mois_annee', array ('mois'=>$mois, 'nommois'=>spip_ucfirst($nommois), 'annee'=>$annee));
 		return _T('date_fmt_jour_mois', array ('jourmois'=>$jourmois, 'jour'=>$jour, 'mois'=>$mois, 'nommois'=>$nommois, 'annee'=>$annee));
 
 	case 'jourcourt':
 		if ($avjc) return $annee;
-		$a = date('Y');
+		$a = ((isset($options['annee_courante']) AND $options['annee_courante'])?$options['annee_courante']:date('Y'));
 		if ($annee < ($a - 100) OR $annee > ($a + 100)) return $annee;
 		if ($annee != $a) return _T('date_fmt_jour_mois_annee', array ('jourmois'=>$jourmois, 'jour'=>$jour, 'mois'=>$mois, 'nommois'=>$nommois, 'annee'=>$annee));
 		return _T('date_fmt_jour_mois', array ('jourmois'=>$jourmois, 'jour'=>$jour, 'mois'=>$mois, 'nommois'=>$nommois, 'annee'=>$annee));
@@ -995,10 +1039,16 @@ function affdate_base($numdate, $vue, $param = '') {
 		if ($avjc) return $annee;
 		if ($jour)
 			return _T('date_fmt_jour_mois_annee', array ('jourmois'=>$jourmois, 'jour'=>$jour, 'mois'=>$mois, 'nommois'=>$nommois, 'annee'=>$annee));
-		else
+		elseif ($mois)
 			return trim(_T('date_fmt_mois_annee', array ('mois'=>$mois, 'nommois'=>$nommois, 'annee'=>$annee)));
+		else
+			return $annee;
 
 	case 'nom_mois':
+		$param = ((isset($options['param']) AND $options['param']) ? '_'.$options['param'] : '');
+		if ($param and $mois) {
+			return _T('date_mois_'.$mois.$param);
+		}
 		return $nommois;
 
 	case 'mois':
@@ -1015,7 +1065,7 @@ function affdate_base($numdate, $vue, $param = '') {
 			return '';
 		$nom = mktime(1,1,1,$mois,$njour,$annee);
 		$nom = 1+date('w',$nom);
-		$param = $param ? '_'.$param : '';
+		$param = ((isset($options['param']) AND $options['param']) ? '_'.$options['param'] : '');
 		return _T('date_jour_'.$nom.$param);
 
 	case 'mois_annee':
@@ -1054,8 +1104,9 @@ function mois($numdate) {
 }
 
 // http://doc.spip.org/@nom_mois
-function nom_mois($numdate) {
-	return affdate_base($numdate, 'nom_mois');
+function nom_mois($numdate, $forme='') {
+	if(!($forme == 'abbr')) $forme = '';
+	return affdate_base($numdate, 'nom_mois', $forme);
 }
 
 // http://doc.spip.org/@annee
@@ -1068,19 +1119,24 @@ function saison($numdate) {
 	return affdate_base($numdate, 'saison');
 }
 
+// http://doc.spip.org/@saison_annee
+function saison_annee($numdate) {
+	return affdate_base($numdate, 'saison_annee');
+}
+
 // http://doc.spip.org/@affdate
 function affdate($numdate, $format='entier') {
 	return affdate_base($numdate, $format);
 }
 
 // http://doc.spip.org/@affdate_court
-function affdate_court($numdate) {
-	return affdate_base($numdate, 'court');
+function affdate_court($numdate, $annee_courante=null) {
+	return affdate_base($numdate, 'court', array('annee_courante'=>$annee_courante));
 }
 
 // http://doc.spip.org/@affdate_jourcourt
-function affdate_jourcourt($numdate) {
-	return affdate_base($numdate, 'jourcourt');
+function affdate_jourcourt($numdate, $annee_courante=null) {
+	return affdate_base($numdate, 'jourcourt', array('annee_courante'=>$annee_courante));
 }
 
 // http://doc.spip.org/@affdate_mois_annee
@@ -1096,48 +1152,150 @@ function affdate_heure($numdate) {
 	return _T('date_fmt_jour_heure', array('jour' => affdate($numdate), 'heure' =>  _T('date_fmt_heures_minutes', array('h'=> $heures, 'm'=> $minutes))));
 }
 
+/**
+ * Afficher de facon textuelle les dates de debut et fin en fonction des cas
+ * - Lundi 20 fevrier a 18h
+ * - Le 20 fevrier de 18h a 20h
+ * - Du 20 au 23 fevrier
+ * - Du 20 fevrier au 30 mars
+ * - Du 20 fevrier 2007 au 30 mars 2008
+ * $horaire='oui' ou true permet d'afficher l'horaire, toute autre valeur n'indique que le jour
+ * $forme peut contenir une ou plusieurs valeurs parmi
+ *  - abbr (afficher le nom des jours en abrege)
+ *  - hcal (generer une date au format hcal)
+ *  - jour (forcer l'affichage des jours)
+ *  - annee (forcer l'affichage de l'annee)
+ *
+ * @param string $date_debut
+ * @param string $date_fin
+ * @param string $horaire
+ * @param string $forme
+ *   abbr pour afficher le nom du jour en abrege (Dim. au lieu de Dimanche)
+ *   annee pour forcer l'affichage de l'annee courante
+ *   jour pour forcer l'affichage du nom du jour
+ *   hcal pour avoir un markup microformat abbr
+ * @return string
+ */
+function affdate_debut_fin($date_debut, $date_fin, $horaire = 'oui', $forme=''){
+	$abbr = $jour = '';
+	$affdate = "affdate_jourcourt";
+	if (strpos($forme,'abbr') !==false) $abbr = 'abbr';
+	if (strpos($forme,'annee')!==false) $affdate = 'affdate';
+	if (strpos($forme,'jour') !==false) $jour = 'jour';
+	
+	$dtstart = $dtend = $dtabbr = "";
+	if (strpos($forme,'hcal')!==false) {
+		$dtstart = "<abbr class='dtstart' title='".date_iso($date_debut)."'>";
+		$dtend = "<abbr class='dtend' title='".date_iso($date_fin)."'>";
+		$dtabbr = "</abbr>";
+	}
 
-//
-// Alignements en HTML (Old-style, preferer CSS)
-//
+	$date_debut = strtotime($date_debut);
+	$date_fin = strtotime($date_fin);
+	$d = date("Y-m-d", $date_debut);
+	$f = date("Y-m-d", $date_fin);
+	$h = ($horaire==='oui' OR $horaire===true);
+	$hd = _T('date_fmt_heures_minutes_court', array('h'=> date("H",$date_debut), 'm'=> date("i",$date_debut)));
+	$hf = _T('date_fmt_heures_minutes_court', array('h'=> date("H",$date_fin), 'm'=> date("i",$date_fin)));
 
-// Cette fonction cree le paragraphe s'il n'existe pas (texte sur un seul para)
-// http://doc.spip.org/@aligner
+	if ($d==$f)
+	{ // meme jour
+		$nomjour = nom_jour($d,$abbr);
+		$s = $affdate($d);
+		$s = _T('date_fmt_jour',array('nomjour'=>$nomjour,'jour' => $s));
+		if ($h){
+			if ($hd==$hf){
+				// Lundi 20 fevrier a 18h25
+				$s = spip_ucfirst(_T('date_fmt_jour_heure',array('jour'=>$s,'heure'=>$hd)));
+				$s = "$dtstart$s$dtabbr";
+			}else{
+				// Le <abbr...>lundi 20 fevrier de 18h00</abbr> a <abbr...>20h00</abbr>
+				if($dtabbr && $dtstart && $dtend)
+					$s = _T('date_fmt_jour_heure_debut_fin_abbr',array('jour'=>spip_ucfirst($s),'heure_debut'=>$hd,'heure_fin'=>$hf,'dtstart'=>$dtstart,'dtend'=>$dtend,'dtabbr'=>$dtabbr));
+				// Le lundi 20 fevrier de 18h00 a 20h00
+				else
+					$s = spip_ucfirst(_T('date_fmt_jour_heure_debut_fin',array('jour'=>$s,'heure_debut'=>$hd,'heure_fin'=>$hf)));
+			}
+		}else{
+			if($dtabbr && $dtstart)
+				$s = $dtstart.spip_ucfirst($s).$dtabbr;
+			else
+				$s = spip_ucfirst($s);
+		}
+	}
+	else if ((date("Y-m",$date_debut))==date("Y-m",$date_fin))
+	{ // meme annee et mois, jours differents
+		if(!$h)
+			$date_debut = jour($d);
+		else
+			$date_debut = affdate_jourcourt($d,date("Y",$date_fin));
+		$date_fin = $affdate($f);
+		if($jour){
+			$nomjour_debut = nom_jour($d,$abbr);
+			$date_debut = _T('date_fmt_jour',array('nomjour'=>$nomjour_debut,'jour' => $date_debut));
+			$nomjour_fin = nom_jour($f,$abbr);
+			$date_fin = _T('date_fmt_jour',array('nomjour'=>$nomjour_fin,'jour' => $date_fin));
+		}
+		if ($h){
+			$date_debut = _T('date_fmt_jour_heure',array('jour'=>$date_debut,'heure'=>$hd));
+			$date_fin = _T('date_fmt_jour_heure',array('jour'=>$date_fin,'heure'=>$hf));
+		}
+		$date_debut = $dtstart.$date_debut.$dtabbr;
+		$date_fin = $dtend.$date_fin.$dtabbr;
+		
+		$s = _T('date_fmt_periode',array('date_debut' => $date_debut,'date_fin'=>$date_fin));
+	}
+	else {
+		$date_debut = affdate_jourcourt($d,date("Y",$date_fin));
+		$date_fin = $affdate($f);
+		if($jour){
+			$nomjour_debut = nom_jour($d,$abbr);
+			$date_debut = _T('date_fmt_jour',array('nomjour'=>$nomjour_debut,'jour' => $date_debut));
+			$nomjour_fin = nom_jour($f,$abbr);
+			$date_fin = _T('date_fmt_jour',array('nomjour'=>$nomjour_fin,'jour' => $date_fin));
+		}
+		if ($h){
+			$date_debut = _T('date_fmt_jour_heure',array('jour'=>$date_debut,'heure'=>$hd)); 
+			$date_fin = _T('date_fmt_jour_heure',array('jour'=>$date_fin,'heure'=>$hf));
+		}
+		
+		$date_debut = $dtstart.$date_debut.$dtabbr;
+		$date_fin=$dtend.$date_fin.$dtabbr;
+		$s = _T('date_fmt_periode',array('date_debut' => $date_debut,'date_fin'=>$date_fin));
+		
+	}
+	return $s;
+}
+
+/**
+ * Alignements en HTML (Old-style, preferer CSS)
+ * Cette fonction ne cree pas de paragraphe
+ *
+ * http://doc.spip.org/@aligner
+ *
+ * @param  $letexte
+ * @param string $justif
+ * @return string
+ */
 function aligner($letexte, $justif='') {
 	$letexte = trim($letexte);
 	if (!strlen($letexte)) return '';
 
-	// Paragrapher proprement
-	$letexte = paragrapher($letexte, true);
-
-	// Inserer les alignements
-	if ($justif)
-		$letexte = str_replace(
-		'<p class="spip">', '<p class="spip" align="'.$justif.'">',
-		$letexte);
+	// Paragrapher rapidement
+	$letexte = "<div style='text-align:$justif'>"
+		. $letexte
+	  ."</div>";
 
 	return $letexte;
 }
-
 // http://doc.spip.org/@justifier
-function justifier($letexte) {
-	return aligner($letexte,'justify');
-}
-
+function justifier($letexte) { return aligner($letexte,'justify');}
 // http://doc.spip.org/@aligner_droite
-function aligner_droite($letexte) {
-	return aligner($letexte,'right');
-}
-
+function aligner_droite($letexte) { return aligner($letexte,'right');}
 // http://doc.spip.org/@aligner_gauche
-function aligner_gauche($letexte) {
-	return aligner($letexte,'left');
-}
-
+function aligner_gauche($letexte) {return aligner($letexte,'left');}
 // http://doc.spip.org/@centrer
-function centrer($letexte) {
-	return aligner($letexte,'center');
-}
+function centrer($letexte) {return aligner($letexte,'center');}
 
 // http://doc.spip.org/@style_align
 function style_align($bof) {
@@ -1216,91 +1374,6 @@ function date_fin_semaine($annee, $mois, $jour) {
   return date("Ymd", mktime(0,0,0,$mois,$debut+6,$annee));
 }
 
-// http://doc.spip.org/@agenda_connu
-function agenda_connu($type)
-{
-  return in_array($type, array('jour','mois','semaine','periode')) ? ' ' : '';
-}
-
-
-// Cette fonction memorise dans un tableau indexe par son 5e arg
-// un evenement decrit par les 4 autres (date, descriptif, titre, URL). 
-// Appellee avec une date nulle, elle renvoie le tableau construit.
-// l'indexation par le 5e arg autorise plusieurs calendriers dans une page
-
-// http://doc.spip.org/@agenda_memo
-function agenda_memo($date=0 , $descriptif='', $titre='', $url='', $cal='')
-{
-  static $agenda = array();
-  if (!$date) return $agenda;
-  $idate = date_ical($date);
-  $cal = trim($cal); // func_get_args (filtre alterner) rajoute \n !!!!
-  $agenda[$cal][(date_anneemoisjour($date))][] =  array(
-			'CATEGORIES' => $cal,
-			'DTSTART' => $idate,
-			'DTEND' => $idate,
-                        'DESCRIPTION' => texte_script($descriptif),
-                        'SUMMARY' => texte_script($titre),
-                        'URL' => $url);
-  // toujours retourner vide pour qu'il ne se passe rien
-  return "";
-}
-
-// Cette fonction recoit:
-// - un nombre d'evenements, 
-// - une chaine a afficher si ce nombre est nul, 
-// - un type de calendrier
-// -- et une suite de noms N.
-// Elle demande a la fonction precedente son tableau
-// et affiche selon le type les elements indexes par N dans ce tableau.
-// Si le suite de noms est vide, tout le tableau est pris
-// Ces noms N sont aussi des classes CSS utilisees par http_calendrier_init
-// Cette fonction recupere aussi par _request les parametres
-// jour, mois, annee, echelle, partie_cal (a ameliorer)
-
-// http://doc.spip.org/@agenda_affiche
-function agenda_affiche($i)
-{
-	include_spip('inc/agenda');
-	$args = func_get_args();
-	// date ou nombre d'evenements (on pourrait l'afficher)
-	$nb = array_shift($args); 
-	$evt = array_shift($args);
-	$type = array_shift($args);
-		spip_log("evt $nb");
-	if (!$nb) { 
-		$d = array(time());
-	} else {
-		$agenda = agenda_memo(0);
-		$evt = array();
-		foreach (($args ? $args : array_keys($agenda)) as $k) {  
-			if (is_array($agenda[$k]))
-				foreach($agenda[$k] as $d => $v) { 
-					$evt[$d] = $evt[$d] ? (array_merge($evt[$d], $v)) : $v;
-				}
-		}
-		$d = array_keys($evt);
-	}
-	if (count($d)){
-		$mindate = min($d);
-		$start = strtotime($mindate);
-	} else {  
-		$mindate = ($j=_request('jour')) * ($m=_request('mois')) * ($a=_request('annee'));  
-  		if ($mindate)
-			$start = mktime(0,0,0, $m, $j, $a);
-  		else $start = mktime(0,0,0);
-	}
-	if ($type != 'periode')
-		$evt = array('', $evt);
-	else {
-		$min = substr($mindate,6,2);
-		$max = $min + ((strtotime(max($d)) - $start) / (3600 * 24));
-		if ($max < 31) $max = 0;
-		$evt = array('', $evt, $min, $max);
-		$type = 'mois';
-	}
-	return http_calendrier_init($start, $type,  _request('echelle'), _request('partie_cal'), self('&'), $evt);
-}
 
 //
 // Recuperation de donnees dans le champ extra
@@ -1315,6 +1388,8 @@ function extra($letexte, $champ) {
 // postautobr : transforme les sauts de ligne en _
 // http://doc.spip.org/@post_autobr
 function post_autobr($texte, $delim="\n_ ") {
+	if (!function_exists('echappe_html'))
+		include_spip('inc/texte_mini');
 	$texte = str_replace("\r\n", "\r", $texte);
 	$texte = str_replace("\r", "\n", $texte);
 
@@ -1325,6 +1400,14 @@ function post_autobr($texte, $delim="\n_ ") {
 
 	$texte = echappe_html($texte, '', true);
 
+	// echapper les modeles
+	if (strpos($texte,"<")!==false){
+		include_spip('inc/lien');
+		if (defined('_PREG_MODELE')){
+			$preg_modeles = "@"._PREG_MODELE."@imsS";
+			$texte = echappe_html($texte, '', true, $preg_modeles);
+		}
+	}
 
 	$debut = '';
 	$suite = $texte;
@@ -1333,8 +1416,8 @@ function post_autobr($texte, $delim="\n_ ") {
 		$suite = substr($suite, $t);
 		$car = substr($suite, 0, 1);
 		if (($car<>'-') AND ($car<>'_') AND ($car<>"\n") AND ($car<>"|") AND ($car<>"}")
-		AND !preg_match(',^\s*(\n|</?(quote|div)|$),S',($suite))
-		AND !preg_match(',</?(quote|div)> *$,iS', $debut)) {
+		AND !preg_match(',^\s*(\n|</?(quote|div|dl|dt|dd)|$),S',($suite))
+		AND !preg_match(',</?(quote|div|dl|dt|dd)> *$,iS', $debut)) {
 			$debut .= $delim;
 		} else
 			$debut .= "\n";
@@ -1350,36 +1433,51 @@ function post_autobr($texte, $delim="\n_ ") {
 }
 
 
-//
-// Gestion des blocs multilingues
-//
+define('_EXTRAIRE_MULTI', "@<multi>(.*?)</multi>@sS");
 
-//
-// Selection dans un tableau dont les index sont des noms de langues
-// de la valeur associee a la langue en cours
-//
+// Extraire et transformer les blocs multi ; on indique la langue courante
+// pour ne pas mettre de span@lang=fr si on est deja en fr
+// http://doc.spip.org/@extraire_multi
+function extraire_multi($letexte, $lang=null, $echappe_span=false) {
+	if (preg_match_all(_EXTRAIRE_MULTI, $letexte, $regs, PREG_SET_ORDER)) {
+		if (!$lang) $lang = $GLOBALS['spip_lang'];
 
-// http://doc.spip.org/@multi_trad
-function multi_trad ($trads) {
-	global  $spip_lang; 
+		foreach ($regs as $reg) {
+			// chercher la version de la langue courante
+			$trads = extraire_trads($reg[1]);
+			if ($l = approcher_langue($trads, $lang)) {
+				$trad = $trads[$l];
+			} else {
+				include_spip('inc/texte');
+				// langue absente, prendre la premiere dispo
+				// mais typographier le texte selon les regles de celle-ci
+				// Attention aux blocs multi sur plusieurs lignes
+				$l = key($trads);
+				$trad = $trads[$l];
+				$typographie = charger_fonction(lang_typo($l), 'typographie');
+				$trad = $typographie($trad);
+				include_spip('inc/texte');
+				// Tester si on echappe en span ou en div
+				// il ne faut pas echapper en div si propre produit un seul paragraphe
+				$trad_propre = preg_replace(",(^<p[^>]*>|</p>$),Uims","",propre($trad));
+				$mode = preg_match(',</?('._BALISES_BLOCS.')[>[:space:]],iS', $trad_propre) ? 'div' : 'span';
+				$trad = code_echappement($trad, 'multi', false, $mode);
+				$trad = str_replace("'", '"', inserer_attribut($trad, 'lang', $l));
+				if (lang_dir($l) !== lang_dir($lang))
+					$trad = str_replace("'", '"', inserer_attribut($trad, 'dir', lang_dir($l)));
+				if (!$echappe_span)
+					$trad = echappe_retour($trad, 'multi');
+			}
+			$letexte = str_replace($reg[0], $trad, $letexte);
+		}
+	}
 
-	if (isset($trads[$spip_lang])) {
-		return $trads[$spip_lang];
-
-	}	// cas des langues xx_yy
-	else if (preg_match(',^([a-z]+)_,', $spip_lang, $regs) AND isset($trads[$regs[1]])) {
-		return $trads[$regs[1]];
-	}	
-	// sinon, renvoyer la premiere du tableau
-	// remarque : on pourrait aussi appeler un service de traduction externe
-	// ou permettre de choisir une langue "plus proche",
-	// par exemple le francais pour l'espagnol, l'anglais pour l'allemand, etc.
-	else  return array_shift($trads);
+	return $letexte;
 }
 
-// analyse un bloc multi
+// convertit le contenu d'une balise multi en un tableau
 // http://doc.spip.org/@extraire_trad
-function extraire_trad ($bloc) {
+function extraire_trads($bloc) {
 	$lang = '';
 // ce reg fait planter l'analyse multi s'il y a de l'{italique} dans le champ
 //	while (preg_match("/^(.*?)[{\[]([a-z_]+)[}\]]/siS", $bloc, $regs)) {
@@ -1392,20 +1490,13 @@ function extraire_trad ($bloc) {
 	}
 	$trads[$lang] = $bloc;
 
-	// faire la traduction avec ces donnees
-	return multi_trad($trads);
+	return $trads;
 }
 
-// repere les blocs multi dans un texte et extrait le bon
-// http://doc.spip.org/@extraire_multi
-function extraire_multi ($letexte) {
-	if (strpos($letexte, '<multi>') === false) return $letexte; // perf
-	if (preg_match_all("@<multi>(.*?)</multi>@sS", $letexte, $regs, PREG_SET_ORDER))
-		foreach ($regs as $reg)
-			$letexte = str_replace($reg[0], extraire_trad($reg[1]), $letexte);
-	return $letexte;
+// Calculer l'initiale d'un nom
+function initiale($nom){
+	return spip_substr(trim(strtoupper(extraire_multi($nom))),0,1);
 }
-
 
 //
 // Ce filtre retourne la donnee si c'est la premiere fois qu'il la voit ;
@@ -1418,7 +1509,7 @@ function extraire_multi ($letexte) {
 // http://www.spip.net/@unique
 // http://doc.spip.org/@unique
 function unique($donnee, $famille='', $cpt = false) {
-	static $mem;
+	static $mem = array();
 	// permettre de vider la pile et de la restaurer
 	// pour le calcul de introduction...
 	if ($famille=='_spip_raz_'){
@@ -1429,11 +1520,20 @@ function unique($donnee, $famille='', $cpt = false) {
 		$mem = $donnee;
 		return;
 	}
-
-	if ($cpt)
+	// eviter une notice
+	if (!isset($mem[$famille])) {
+		$mem[$famille] = array();
+	}
+	if ($cpt) {
 		return count($mem[$famille]);
-	if (!($mem[$famille][$donnee]++))
+	}
+	// eviter une notice
+	if (!isset($mem[$famille][$donnee])) {
+		$mem[$famille][$donnee] = 0;
+	}
+	if (!($mem[$famille][$donnee]++)) {
 		return $donnee;
+	}
 }
 
 //
@@ -1473,7 +1573,7 @@ function extraire_attribut($balise, $attribut, $complet = false) {
 		return $balise;
 	}
 	if (preg_match(
-	',(^.*?<(?:(?>\s*)(?>[\w:]+)(?>(?:=(?:"[^"]*"|\'[^\']*\'|[^\'"]\S*))?))*?)(\s+'
+	',(^.*?<(?:(?>\s*)(?>[\w:.-]+)(?>(?:=(?:"[^"]*"|\'[^\']*\'|[^\'"]\S*))?))*?)(\s+'
 	.$attribut
 	.'(?:=\s*("[^"]*"|\'[^\']*\'|[^\'"]\S*))?)()([^>]*>.*),isS',
 
@@ -1487,7 +1587,10 @@ function extraire_attribut($balise, $attribut, $complet = false) {
 		} else {
 			$r[4] = trim($r[2]); 
 		}
-		$att = filtrer_entites(str_replace("&#39;", "'", $r[4]));
+		$att = $r[4];
+		if (strpos($att,"&#")!==false)
+			$att = str_replace(array("&#039;","&#39;","&#034;","&#34;"), array("'","'",'"','"'), $att);
+		$att = filtrer_entites($att);
 	}
 	else
 		$att = NULL;
@@ -1498,14 +1601,26 @@ function extraire_attribut($balise, $attribut, $complet = false) {
 		return $att;
 }
 
-// modifier (ou inserer) un attribut html dans une balise
-// http://doc.spip.org/@inserer_attribut
-function inserer_attribut($balise, $attribut, $val, $texte_backend=true, $vider=false) {
+/**
+ * modifier (ou inserer) un attribut html dans une balise
+ *
+ * http://doc.spip.org/@inserer_attribut
+ *
+ * @param string $balise
+ * @param string $attribut
+ * @param string $val
+ * @param bool $proteger
+ * @param bool $vider
+ * @return string
+ */
+function inserer_attribut($balise, $attribut, $val, $proteger=true, $vider=false) {
 	// preparer l'attribut
-	if ($texte_backend) $val = texte_backend($val); # supprimer les &nbsp; etc
+	// supprimer les &nbsp; etc mais pas les balises html
+	// qui ont un sens dans un attribut value d'un input
+	if ($proteger) $val = attribut_html($val,false);
 
 	// echapper les ' pour eviter tout bug
-	$val = str_replace("'", "&#39;", $val);
+	$val = str_replace("'", "&#039;", $val);
 	if ($vider AND strlen($val)==0)
 		$insert = '';
 	else
@@ -1535,57 +1650,16 @@ function vider_attribut ($balise, $attribut) {
 }
 
 
-// Un filtre pour determiner le nom du mode des librement inscrits,
-// a l'aide de la liste globale des statuts (tableau mode => nom du mode)
-// Utile pour le formulaire d'inscription.
-// Si un mode est fourni, verifier que la configuration l'accepte.
-// Si mode inconnu laisser faire, c'est une extension non std
-// mais verifier que la syntaxe est compatible avec SQL
-
-// http://doc.spip.org/@tester_config
+/**
+ * Un filtre pour determiner le nom du satut des inscrits
+ *
+ * @param void|int $id
+ * @param string $mode
+ * @return string
+ */
 function tester_config($id, $mode='') {
-
-	$s = array_search($mode, $GLOBALS['liste_des_statuts']);
-	switch ($s) {
-
-	case 'info_redacteurs' :
-	  return (($GLOBALS['meta']['accepter_inscriptions'] == 'oui') ? $mode : '');
-
-	case 'info_visiteurs' : 
-	  return (($GLOBALS['meta']['accepter_visiteurs'] == 'oui' OR $GLOBALS['meta']['forums_publics'] == 'abo') ? $mode : '');
-
-	default:
-	  if ($mode AND $mode == addslashes($mode))
-	    return $mode;
-	  if ($GLOBALS['meta']["accepter_inscriptions"] == "oui")
-	    return $GLOBALS['liste_des_statuts']['info_redacteurs'];
-	  if ($GLOBALS['meta']["accepter_visiteurs"] == "oui")
-	    return $GLOBALS['liste_des_statuts']['info_visiteurs'];
-	  return '';
-	}
-}
-
-//
-// Un filtre qui, etant donne un #PARAMETRES_FORUM, retourne un URL de suivi rss
-// dudit forum
-// Attention applique a un #PARAMETRES_FORUM complexe (id_article=x&id_forum=y)
-// ca retourne un url de suivi du thread y (que le thread existe ou non)
-// http://doc.spip.org/@url_rss_forum
-function url_rss_forum($param) {
-	if (!preg_match(',.*(id_(\w*?))=([0-9]+),S', $param, $regs)) return '';
-	list(,$k,$t,$v) = $regs;
-	if ($t == 'forum') $k = 'id_' . ($t = 'thread');
-	return generer_url_public("rss_forum_$t", array($k => $v));
-}
-
-//
-// Un filtre applique a #PARAMETRES_FORUM, qui donne l'adresse de la page
-// de reponse
-//
-// http://doc.spip.org/@url_reponse_forum
-function url_reponse_forum($parametres) {
-	if (!$parametres) return '';
-	return generer_url_public('forum', $parametres);
+	include_spip('action/inscrire_auteur');
+	return tester_statut_inscription($mode, $id);
 }
 
 //
@@ -1609,14 +1683,46 @@ function div($a,$b) {
 }
 // http://doc.spip.org/@modulo
 function modulo($nb, $mod, $add=0) {
-	return ($nb%$mod)+$add;
+	return ($mod?$nb%$mod:0)+$add;
 }
 
+
+/**
+ * Vérifie qu'un nom (d'auteur) ne comporte pas d'autres tags que <multi>
+ * et ceux volontairement spécifiés dans la constante
+ *
+ * @param string $nom
+ *      Nom (signature) proposé
+ * @return bool
+ *      - false si pas conforme,
+ *      - true sinon
+**/
+function nom_acceptable($nom) {
+	if (!is_string($nom)) {
+		return false;
+	}
+	if (!defined('_TAGS_NOM_AUTEUR')) define('_TAGS_NOM_AUTEUR','');
+	$tags_acceptes = array_unique(explode(',', 'multi,' . _TAGS_NOM_AUTEUR));
+	foreach($tags_acceptes as $tag) {
+		if (strlen($tag)) {
+			$remp1[] = '<'.trim($tag).'>';
+			$remp1[] = '</'.trim($tag).'>';
+			$remp2[] = '\x60'.trim($tag).'\x61';
+			$remp2[] = '\x60/'.trim($tag).'\x61';
+		}
+	}	
+	$v_nom = str_replace($remp2, $remp1, supprimer_tags(str_replace($remp1, $remp2, $nom)));
+	return str_replace('&lt;', '<', $v_nom) == $nom;
+}
 
 // Verifier la conformite d'une ou plusieurs adresses email
 //  retourne false ou la  normalisation de la derniere adresse donnee
 // http://doc.spip.org/@email_valide
 function email_valide($adresses) {
+	// eviter d'injecter n'importe quoi dans preg_match
+	if (!is_string($adresses))
+		return false;
+
 	// Si c'est un spammeur autant arreter tout de suite
 	if (preg_match(",[\n\r].*(MIME|multipart|Content-),i", $adresses)) {
 		spip_log("Tentative d'injection de mail : $adresses");
@@ -1642,8 +1748,8 @@ function afficher_enclosures($tags) {
 		AND $t = extraire_attribut($tag, 'href')) {
 			$s[] = preg_replace(',>[^<]+</a>,S', 
 				'>'
-				.http_img_pack('attachment.gif', $t,
-					'height="15" width="15" title="'.attribut_html($t).'"')
+				.http_img_pack('attachment-16.png', $t,
+					'title="'.attribut_html($t).'"')
 				.'</a>', $tag);
 		}
 	}
@@ -1668,12 +1774,15 @@ function enclosure2microformat($e) {
 	if (!$url = filtrer_entites(extraire_attribut($e, 'url')))
 		$url = filtrer_entites(extraire_attribut($e, 'href'));
 	$type = extraire_attribut($e, 'type');
-	$length = extraire_attribut($e, 'length');
+	if (!$length = extraire_attribut($e, 'length')) {
+		# <media:content : longeur dans fileSize. On tente.
+		$length = extraire_attribut($e, 'fileSize');
+	}
 	$fichier = basename($url);
 	return '<a rel="enclosure"'
-		. ($url? ' href="'.htmlspecialchars($url).'"' : '')
-		. ($type? ' type="'.htmlspecialchars($type).'"' : '')
-		. ($length? ' title="'.htmlspecialchars($length).'"' : '')
+		. ($url? ' href="'.spip_htmlspecialchars($url).'"' : '')
+		. ($type? ' type="'.spip_htmlspecialchars($type).'"' : '')
+		. ($length? ' title="'.spip_htmlspecialchars($length).'"' : '')
 		. '>'.$fichier.'</a>';
 }
 // La fonction inverse
@@ -1688,8 +1797,8 @@ function microformat2enclosure($tags) {
 			$length = intval(extraire_attribut($e, 'length')); # vieux data
 		$fichier = basename($url);
 		$enclosures[] = '<enclosure'
-			. ($url? ' url="'.htmlspecialchars($url).'"' : '')
-			. ($type? ' type="'.htmlspecialchars($type).'"' : '')
+			. ($url? ' url="'.spip_htmlspecialchars($url).'"' : '')
+			. ($type? ' type="'.spip_htmlspecialchars($type).'"' : '')
 			. ($length? ' length="'.$length.'"' : '')
 			. ' />';
 	}
@@ -1707,13 +1816,6 @@ function tags2dcsubject($tags) {
 		}
 	}
 	return $subjects;
-}
-// fabrique un bouton de type $t de Name $n, de Value $v et autres attributs $a
-// http://doc.spip.org/@boutonne
-function boutonne($t, $n, $v, $a='') {
-	return "\n<input type='$t'"
-	. (!$n ? '' : " name='$n'")
-	. " value=\"$v\" $a />";
 }
 
 // retourne la premiere balise du type demande
@@ -1758,6 +1860,7 @@ function extraire_balises($texte, $tag='a') {
 
 // http://doc.spip.org/@in_any
 function in_any($val, $vals, $def='') {
+	if (!is_array($vals) AND $v=unserialize($vals)) $vals = $v;
   return (!is_array($vals) ? $def : (in_array($val, $vals) ? ' ' : ''));
 }
 
@@ -1765,6 +1868,7 @@ function in_any($val, $vals, $def='') {
 // n'accepte que les *, + et - (a ameliorer si on l'utilise vraiment)
 // http://doc.spip.org/@valeur_numerique
 function valeur_numerique($expr) {
+	$a = 0;
 	if (preg_match(',^[0-9]+(\s*[+*-]\s*[0-9]+)*$,S', trim($expr)))
 		eval("\$a = $expr;");
 	return intval($a);
@@ -1777,25 +1881,27 @@ function regledetrois($a,$b,$c)
 }
 
 // Fournit la suite de Input-Hidden correspondant aux parametres de
-// l'URL donnee en argument, compatible avec les types_urls depuis [14444].
-// S'il s'agit de l'URL de la page d'appel, 
-// il sait retrouver les parametres implicites des types_urls cryptiques.
-// Si c'est un type_url cryptique sur autre chose, c'est parfois incomplet.
+// l'URL donnee en argument, compatible avec les types_urls depuis [14447].
 // cf. tests/filtres/form_hidden.html
 // http://doc.spip.org/@form_hidden
 function form_hidden($action) {
-	static $uri = '';
-  
-	if (!$uri) $uri = url_absolue(nettoyer_uri());
+
 	$contexte = array();
-	if ($uri == url_absolue($action)
-	AND $renommer = generer_url_entite()
-	AND $p = $renommer($action, $contexte)
-	AND $p[3]) {
-		$contexte = $p[0];
-		$contexte['page'] = $p[3];
-		$action = preg_replace('/^([^?]*)[?][^&]*/', '\1', $action);
+	include_spip('inc/urls');
+	if ($p = urls_decoder_url($action, '')
+		AND reset($p)) {
+		$fond = array_shift($p);
+		if ($fond!='404'){
+			$contexte = array_shift($p);
+			$contexte['page'] = $fond;
+			$action = preg_replace('/([?]'.preg_quote($fond).'[^&=]*[0-9]+)(&|$)/', '?&', $action);
+		}
 	}
+	// defaire ce qu'a injecte urls_decoder_url : a revoir en modifiant la signature de urls_decoder_url
+	if (defined('_DEFINIR_CONTEXTE_TYPE') AND _DEFINIR_CONTEXTE_TYPE)
+		unset($contexte['type']);
+	if (defined('_DEFINIR_CONTEXTE_TYPE_PAGE') AND _DEFINIR_CONTEXTE_TYPE_PAGE)
+		unset($contexte['type-page']);
 
 	// on va remplir un tableau de valeurs en prenant bien soin de ne pas
 	// ecraser les elements de la forme mots[]=1&mots[]=2
@@ -1807,6 +1913,7 @@ function form_hidden($action) {
 			list($var,$val) = explode('=', $c, 2);
 			if ($var) {
 				$val =  rawurldecode($val);
+				$var =  rawurldecode($var); // decoder les [] eventuels
 				if (preg_match(',\[\]$,S', $var))
 					$values[] = array($var, $val);
 				else if (!isset($values[$var]))
@@ -1833,11 +1940,10 @@ function form_hidden($action) {
 				? ''
 				: ' value="'.entites_html($val).'"'
 				)
-			. ' type="hidden" />';
+			. ' type="hidden"'."\n/>";
 	}
-	return join("\n", $hidden);
+	return join("", $hidden);
 }
-
 
 // http://doc.spip.org/@filtre_bornes_pagination_dist
 function filtre_bornes_pagination_dist($courante, $nombre, $max = 10) {
@@ -1863,11 +1969,11 @@ function filtre_valeur_tableau($array, $index) {
 }
 // http://doc.spip.org/@filtre_reset
 function filtre_reset($array) {
-	return filtre_valeur_tableau($array,0);
+	return !is_array($array) ? null : reset($array);
 }
 // http://doc.spip.org/@filtre_end
 function filtre_end($array) {
-	return filtre_valeur_tableau($array,@count($array)-1);
+	return !is_array($array) ? null : end($array);
 }
 
 // http://doc.spip.org/@filtre_push
@@ -1884,23 +1990,23 @@ function filtre_find($array, $val) {
 
 //
 // fonction standard de calcul de la balise #PAGINATION
-// on peut la surcharger en definissant dans mes_fonctions :
-// function pagination($total, $nom, $pas, $liste) {...}
+// on peut la surcharger en definissant filtre_pagination dans mes_fonctions
 //
 
 // http://doc.spip.org/@filtre_pagination_dist
 function filtre_pagination_dist($total, $nom, $position, $pas, $liste = true, $modele='', $connect='', $env=array()) {
 	static $ancres = array();
-	$bloc_ancre = "";
-	
-	if ($pas<1) return;
-
-	$debut = 'debut'.$nom; // 'debut_articles'
+	if ($pas<1) return '';
 	$ancre = 'pagination'.$nom; // #pagination_articles
+	$debut = 'debut'.$nom; // 'debut_articles'
 
 	// n'afficher l'ancre qu'une fois
 	if (!isset($ancres[$ancre]))
-		$bloc_ancre = $ancres[$ancre] = "<a name='$ancre' id='$ancre'></a>";
+		$bloc_ancre = $ancres[$ancre] = "<a name='".$ancre."' id='".$ancre."'></a>";
+	else $bloc_ancre = '';
+	// liste = false : on ne veut que l'ancre
+	if (!$liste)
+		return $ancres[$ancre];
 
 	$pagination = array(
 		'debut' => $debut,
@@ -1920,10 +2026,6 @@ function filtre_pagination_dist($total, $nom, $position, $pas, $liste = true, $m
 	if ($pagination['nombre_pages']<=1)
 		return '';
 
-	// liste = false : on ne veut que l'ancre
-	if (!$liste)
-		return $bloc_ancre;
-
 	if ($modele) $modele = '_'.$modele;
 
 	return recuperer_fond("modeles/pagination$modele", $pagination, array('trim'=>true), $connect);
@@ -1932,12 +2034,12 @@ function filtre_pagination_dist($total, $nom, $position, $pas, $liste = true, $m
 // passer les url relatives a la css d'origine en url absolues
 // http://doc.spip.org/@urls_absolues_css
 function urls_absolues_css($contenu, $source) {
-	$path = dirname(url_absolue($source)).'/';
+	$path = suivre_lien(url_absolue($source),'./');
 
 	return preg_replace_callback(
 		",url\s*\(\s*['\"]?([^'\"/][^:]*)['\"]?\s*\),Uims",
 		create_function('$x',
-			'return "url(".suivre_lien("'.$path.'",$x[1]).")";'
+			'return "url(\"".suivre_lien("'.$path.'",$x[1])."\")";'
 		), $contenu);
 }
 
@@ -1965,26 +2067,41 @@ function direction_css ($css, $voulue='') {
 	if ($voulue == $dir)
 		return $css;
 
-	// 1.
-	$f = preg_replace(',(_rtl)?\.css$,i', '_'.$ndir.'.css', $css);
-	if (@file_exists($f))
-		return $f;
+	if (
+		// url absolue
+		preg_match(",^http:,i",$css)
+		// ou qui contient un ?
+		OR (($p=strpos($css,'?'))!==FALSE)) {
+		$distant = true;
+		$cssf = parse_url($css);
+		$cssf = $cssf['path'].($cssf['query']?"?".$cssf['query']:"");
+		$cssf = preg_replace(',[?:&=],', "_", $cssf);
+	}
+	else {
+		$distant = false;
+		$cssf = $css;
+		// 1. regarder d'abord si un fichier avec la bonne direction n'est pas aussi
+		//propose (rien a faire dans ce cas)
+		$f = preg_replace(',(_rtl)?\.css$,i', '_'.$ndir.'.css', $css);
+		if (@file_exists($f))
+			return $f;
+	}
 
 	// 2.
 	$dir_var = sous_repertoire (_DIR_VAR, 'cache-css');
 	$f = $dir_var
-		. preg_replace(',.*/(.*?)(_rtl)?\.css,', '\1', $css)
-		. '.' . substr(md5($css), 0,4) . '_' . $ndir . '.css';
+		. preg_replace(',.*/(.*?)(_rtl)?\.css,', '\1', $cssf)
+		. '.' . substr(md5($cssf), 0,4) . '_' . $ndir . '.css';
 
 	// la css peut etre distante (url absolue !)
-	if (preg_match(",^http:,i",$css)){
+	if ($distant){
 		include_spip('inc/distant');
 		$contenu = recuperer_page($css);
 		if (!$contenu) return $css;
 	}
 	else {
 		if ((@filemtime($f) > @filemtime($css))
-			AND ($GLOBALS['var_mode'] != 'recalcul'))
+			AND (_VAR_MODE != 'recalcul'))
 			return $f;
 		if (!lire_fichier($css, $contenu))
 			return $css;
@@ -2040,7 +2157,7 @@ function url_absolue_css ($css) {
 		. '.css';
 
 	if ((@filemtime($f) > @filemtime($css))
-	AND ($GLOBALS['var_mode'] != 'recalcul'))
+	AND (_VAR_MODE != 'recalcul'))
 		return $f;
 
 	if ($url_absolue_css==$css){
@@ -2064,34 +2181,48 @@ function url_absolue_css ($css) {
 	return $f;
 }
 
-// http://doc.spip.org/@compacte_css
-function compacte_css ($contenu) {
-	// nettoyer la css de tout ce qui sert pas
-	$contenu = preg_replace(",/\*.*\*/,Ums","",$contenu); // pas de commentaires
-	$contenu = preg_replace(",\s(?=\s),Ums","",$contenu); // pas d'espaces consecutifs
-	$contenu = preg_replace("/\s?({|;|,|:)\s?/ms","$1",$contenu); // pas d'espaces dans les declarations css
-	$contenu = preg_replace("/\s}/ms","}",$contenu); // pas d'espaces dans les declarations css
-	$contenu = preg_replace(",#([0-9a-f])(\\1)([0-9a-f])(\\3)([0-9a-f])(\\5),i","#$1$3$5",$contenu); // passser les codes couleurs en 3 car si possible
-	$contenu = preg_replace(",([^{}]*){},Ums"," ",$contenu); // supprimer les declarations vides
-	$contenu = trim($contenu);
 
-	return $contenu;
-}
 
-// filtre table_valeur
-// permet de recuperer la valeur d'un tableau pour une cle donnee
-// prend en entree un tableau serialise ou non (ce qui permet d'enchainer le filtre)
-// http://doc.spip.org/@table_valeur
-function table_valeur($table,$cle,$defaut=''){
-	$table= is_string($table)?unserialize($table):$table;
-	$table= is_array($table)?$table:array();
-	return isset($table[$cle])?$table[$cle]:$defaut;
+/**
+ * Le filtre table_valeur
+ * permet de recuperer la valeur d'une cle donnee
+ * dans un tableau (ou un objet).
+ * 
+ * @param mixed $table
+ * 		Tableau ou objet
+ * 		(ou chaine serialisee de tableau, ce qui permet d'enchainer le filtre)
+ * 		
+ * @param string $cle
+ * 		Cle du tableau (ou parametre public de l'objet)
+ * 		Cette cle peut contenir des caracteres / pour selectionner
+ * 		des sous elements dans le tableau, tel que "sous/element/ici"
+ * 		pour obtenir la valeur de $tableau['sous']['element']['ici']
+ *
+ * @param mixed $defaut
+ * 		Valeur par defaut retournee si la cle demandee n'existe pas
+ * 
+ * @return mixed Valeur trouvee ou valeur par defaut.
+**/
+function table_valeur($table, $cle, $defaut='') {
+	foreach (explode('/', $cle) as $k) {
+
+		$table = is_string($table) ? @unserialize($table) : $table;
+
+		if (is_object($table)) {
+			$table =  (($k !== "") and isset($table->$k)) ? $table->$k : $defaut;
+		} elseif (is_array($table)) {
+			$table = isset($table[$k]) ? $table[$k] : $defaut;
+		} else {
+			$table = $defaut;
+		}
+	}
+	return $table;
 }
 
 // filtre match pour faire des tests avec expression reguliere
 // [(#TEXTE|match{^ceci$,Uims})]
 // retourne le fragment de chaine qui "matche"
-// il est possible de passer en 3eme argument optionnel le numero de paranthese capturante
+// il est possible de passer en 3eme argument optionnel le numero de parenthese capturante
 // accepte egalement la syntaxe #TRUC|match{truc(...)$,1} ou le modificateur n'est pas passe en second argument
 // http://doc.spip.org/@match
 function match($texte, $expression, $modif="UimsS",$capte=0) {
@@ -2101,8 +2232,14 @@ function match($texte, $expression, $modif="UimsS",$capte=0) {
 	}
 	$expression=str_replace("\/","/",$expression);
 	$expression=str_replace("/","\/",$expression);
-	return preg_match('/' . $expression . '/' . $modif,$texte, $r)
-		? (isset($r[$capte])?$r[$capte]:true) : false;
+
+	if (preg_match('/' . $expression . '/' . $modif,$texte, $r)) {
+		if (isset($r[$capte]))
+			return $r[$capte];
+		else
+			return true;
+	}
+	return false;
 }
 
 // filtre replace pour faire des operations avec expression reguliere
@@ -2170,31 +2307,6 @@ function env_to_attributs ($texte, $ignore_params=array()) {
 	return $texte;
 }
 
-// Inserer jQuery
-// et au passage verifier qu'on ne doublonne pas #INSERT_HEAD
-// http://doc.spip.org/@f_jQuery
-function f_jQuery ($texte) {
-	static $doublon=0;
-	if ($doublon++) {
-		include_spip('public/debug');
-		$texte = affiche_erreurs_page(array(
-			array("#INSERT_HEAD",_T('double_occurrence')))
-		) . $texte;
-	} else {
-		$x = '';
-		foreach (pipeline('jquery_plugins',
-		array(
-			'javascript/jquery.js',
-			'javascript/jquery.form.js',
-			'javascript/ajaxCallback.js'
-		)) as $script)
-			if ($script = find_in_path($script))
-				$x .= "\n<script src=\"$script\" type=\"text/javascript\"></script>\n";
-		$texte = $x.$texte;
-	}
-	return $texte;
-}
-
 // Concatener des chaines
 // #TEXTE|concat{texte1,texte2,...}
 // http://doc.spip.org/@concat
@@ -2205,134 +2317,85 @@ function concat(){
 
 
 // http://doc.spip.org/@charge_scripts
-function charge_scripts($scripts) {
-  $flux = "";
-  $args = is_array($scripts)?$scripts:explode("|",$scripts);
-  foreach($args as $script) {
-    if(preg_match(",^\w+$,",$script)) {
-      $path = find_in_path("javascript/$script.js");
-      if($path) $flux .= spip_file_get_contents($path);
-    }
-  }
-  return $flux;
-}
-
-// Compacte du javascript grace a Dean Edward's JavaScriptPacker
-// utile pour dist/jquery.js par exemple
-// http://doc.spip.org/@compacte_js
-function compacte_js($flux) {
-	if (!strlen($flux))
-		return $flux;
-	include_spip('lib/JavaScriptPacker/class.JavaScriptPacker');
-	$packer = new JavaScriptPacker($flux, 0, true, false);
-
-	// en cas d'echec (?) renvoyer l'original
-	if (strlen($t = $packer->pack()))
-		return $t;
-
-	// erreur
-	spip_log('erreur de compacte_js');
+// http://doc.spip.org/@charge_scripts
+function charge_scripts($files, $script = true) {
+	$flux = "";
+	foreach(is_array($files)?$files:explode("|",$files) as $file) {
+		if (!is_string($file)) continue;
+		if ($script)
+			$file = preg_match(",^\w+$,",$file) ? "javascript/$file.js" : '';
+		if ($file) $path = find_in_path($file);
+		if ($path) $flux .= spip_file_get_contents($path);
+	}
 	return $flux;
 }
 
-// Si la source est un chemin, on retourne un chemin avec le contenu compacte
-// dans _DIR_VAR/cache_$format/
-// Si c'est un flux on le renvoit compacte
-// Si on ne sait pas compacter, on renvoie ce qu'on a recu
-// http://doc.spip.org/@compacte
-function compacte($source, $format = null) {
-	if (!$format AND preg_match(',\.(js|css)$,', $source, $r))
-		$format = $r[1];
-	if (!function_exists($compacte = 'compacte_'.$format))
-		return $source;
-
-	// Si on n'importe pas, est-ce un fichier ?
-	if (!preg_match(',[\s{}],', $source)
-	AND preg_match(',\.'.$format.'$,i', $source, $r)
-	AND file_exists($source)) {
-		// si c'est une css, il faut reecrire les url en absolu
-  	if ($format=='css')
-  		$source = url_absolue_css($source);
-		
-		$f = basename($source,'.'.$format);
-		$f = sous_repertoire (_DIR_VAR, 'cache-'.$format) 
-		. preg_replace(",(.*?)(_rtl|_ltr)?$,","\\1-compacte-"
-		. substr(md5("$source-compacte"), 0,4) . "\\2", $f, 1)
-		. '.' . $format;
-
-		if ((@filemtime($f) > @filemtime($source))
-		AND ($GLOBALS['var_mode'] != 'recalcul'))
-			return $f;
-
-		if (!lire_fichier($source, $contenu))
-			return $source;
-
-		// traiter le contenu
-		$contenu = $compacte($contenu);
-
-		// ecrire le fichier destination, en cas d'echec renvoyer la source
-		if (ecrire_fichier($f, $contenu))
-			return $f;
-		else
-			return $source;
-	}
-
-	// Sinon simple compactage de contenu
-	return $compacte($source);
-}
 
 
-// produit une balise img avec un champ alt d'office si vide
-// attention le htmlentities et la traduction doivent etre appliques avant.
-
-// http://doc.spip.org/@http_wrapper
-function http_wrapper($img){
-	static $wrapper_state=NULL;
-	static $wrapper_table = array();
-	
-	if (strpos($img,'/')===FALSE) // on ne prefixe par _NOM_IMG_PACK que si c'est un nom de fichier sans chemin
-		$f = chemin_image($img);
-	else { // sinon, le path a ete fourni
-		$f = $img;
-		// gerer quand meme le cas des hacks pre 1.9.2 ou l'on faisait un path relatif depuis img_pack
-		if (substr($f,0,strlen("../"._DIR_PLUGINS))=="../"._DIR_PLUGINS)
-			$f = substr($img,3); // on enleve le ../ qui ne faisait que ramener au rep courant
-	}
-	
-	if ($wrapper_state==NULL){
-		global $browser_name;
-		if (!strlen($browser_name)){include_spip('inc/layer');}
-		$wrapper_state = ($browser_name=="MSIE");
-	}
-	if ($wrapper_state){
-		if (!isset($wrapper_table[$d=dirname($f)])) {
-			$wrapper_table[$d] = false;
-			if (file_exists("$d/wrapper.php"))
-				$wrapper_table[$d] = "$d/wrapper.php?file=";
+/**
+ * produit une balise img avec un champ alt d'office si vide
+ * attention le htmlentities et la traduction doivent etre appliques avant.
+ *
+ * http://doc.spip.org/@http_img_pack
+ *
+ * @param $img
+ * @param $alt
+ * @param string $atts
+ * @param string $title
+ * @param array $options
+ *   chemin_image : utiliser chemin_image sur $img fourni, ou non (oui par dafaut)
+ *   utiliser_suffixe_size : utiliser ou non le suffixe de taille dans le nom de fichier de l'image
+ *   sous forme -xx.png (pour les icones essentiellement) (oui par defaut)
+ * @return string
+ */
+function http_img_pack($img, $alt, $atts='', $title='', $options = array()) {
+	if (!isset($options['chemin_image']) OR $options['chemin_image']==true)
+		$img = chemin_image($img);
+	if (stripos($atts, 'width')===false){
+		// utiliser directement l'info de taille presente dans le nom
+		if ((!isset($options['utiliser_suffixe_size']) OR $options['utiliser_suffixe_size']==true)
+		    AND preg_match(',-([0-9]+)[.](png|gif)$,',$img,$regs)){
+			$largeur = $hauteur = intval($regs[1]);
 		}
-		if ($wrapper_table[$d])
-			$f = $wrapper_table[$d] . urlencode(basename($img));
+		else{
+			$taille = taille_image($img);
+			list($hauteur,$largeur) = $taille;
+			if (!$hauteur OR !$largeur)
+				return "";
+		}
+		$atts.=" width='".$largeur."' height='".$hauteur."'";
 	}
-	return $f;
-}
-// http://doc.spip.org/@http_img_pack
-function http_img_pack($img, $alt, $atts='', $title='') {
-
-	return  "<img src='" . http_wrapper($img)
-	  . ("'\nalt=\"" .
-	     str_replace('"','', textebrut($alt ? $alt : ($title ? $title : '')))
-	     . '" ')
-	  . ($title ? "title=\"$title\" " : '')
-	  . $atts
+	return  "<img src='$img' alt='" . attribut_html($alt ? $alt : $title) . "'"
+	  . ($title ? ' title="'.attribut_html($title).'"' : '')
+	  . " ".ltrim($atts)
 	  . " />";
 }
 
-// http://doc.spip.org/@http_style_background
-function http_style_background($img, $att='')
-{
-  return " style='background: url(\"".http_wrapper($img)."\")" .
-	    ($att ? (' ' . $att) : '') . ";'";
+/**
+ * generer une directive style='background:url()' a partir d'un fichier image
+ * 
+ * http://doc.spip.org/@http_style_background
+ *
+ * @param string $img
+ * @param string $att
+ * @return string
+ */
+function http_style_background($img, $att=''){
+  return " style='background".($att?"":"-image").": url(\"".chemin_image($img)."\")" . ($att ? (' ' . $att) : '') . ";'";
 }
+
+/**
+ * une fonction pour generer une balise img a partir d'un nom de fichier
+ *
+ * @param string $img
+ * @param string $alt
+ * @param string $class
+ * @return string
+ */
+function filtre_balise_img_dist($img,$alt="",$class=""){
+	return http_img_pack($img, $alt, $class?" class='".attribut_html($class)."'":'', '', array('chemin_image'=>false,'utiliser_suffixe_size'=>false));
+}
+
 
 //[(#ENV*|unserialize|foreach)]
 // http://doc.spip.org/@filtre_foreach_dist
@@ -2359,295 +2422,159 @@ function filtre_info_plugin_dist($plugin, $type_info) {
 	$plugin = strtoupper($plugin);
 	$plugins_actifs = liste_plugin_actifs();
 
-	if(!$plugin)
+	if (!$plugin)
 		return serialize(array_keys($plugins_actifs));
-	if(!empty($plugins_actifs[$plugin]))
-		if($type_info == 'est_actif')
-			return $plugins_actifs[$plugin] ? 1 : 0;
+	elseif (empty($plugins_actifs[$plugin]))
+		return '';
+	elseif ($type_info == 'est_actif')
+		return $plugins_actifs[$plugin] ? 1 : 0;
+	elseif (isset($plugins_actifs[$plugin][$type_info]))
+		return $plugins_actifs[$plugin][$type_info];
+	else {
+		$get_infos = charger_fonction('get_infos','plugins');
+		// On prend en compte les extensions
+		if (!is_dir($plugins_actifs[$plugin]['dir_type']))
+			$dir_plugins = constant($plugins_actifs[$plugin]['dir_type']);
 		else
-			return $plugins_actifs[$plugin][$type_info];
+			$dir_plugins = $plugins_actifs[$plugin]['dir_type'];
+		if (!$infos = $get_infos($plugins_actifs[$plugin]['dir'], false, $dir_plugins))
+			return '';
+		if ($type_info == 'tout')
+			return $infos;
+		else
+			return strval($infos[$type_info]);
+	}
 }
 
 
-// http://doc.spip.org/@filtre_cache_static
-function filtre_cache_static($scripts,$type='js'){
-	$nom = "";
-	if (!is_array($scripts) && $scripts) $scripts = array($scripts);
-	if (count($scripts)){
-		$dir = sous_repertoire(_DIR_VAR,'cache-'.$type);
-		$nom = $dir . md5(serialize($scripts)) . ".$type";
-		if (
-		  $GLOBALS['var_mode']=='calcul'
-		  OR $GLOBALS['var_mode']=='recalcul'
-		  OR !file_exists($nom)){
-		  	$fichier = "";
-		  	$comms = array();
-		  	$total = 0;
-		  	foreach($scripts as $script){
-		  		if (!is_array($script)) {
-		  			// c'est un fichier
-		  			$comm = $script;
-		  			// enlever le timestamp si besoin
-		  			$script = preg_replace(",[?].+$,",'',$script);
-				  	if ($type=='css')
-				  		$script = url_absolue_css($script);
-		  			lire_fichier($script, $contenu);
-		  		}
-		  		else {
-		  			// c'est un squelette
-		  			$comm = _SPIP_PAGE . "=$script[0]"
-		  				. (strlen($script[1])?"($script[1])":'');
-		  			parse_str($script[1],$contexte);
-		  			$contenu = recuperer_fond($script[0],$contexte);
-		  			if ($type=='css')
-						$contenu = urls_absolues_css($contenu, self('&'));
-		  		}
-				$f = 'compacte_'.$type;
-	  			$fichier .= "/* $comm */\n". $f($contenu) . "\n\n";
-				$comms[] = $comm;
-				$total += strlen($contenu);
-		  	}
-
-			// calcul du % de compactage
-			$pc = intval(1000*strlen($fichier)/$total)/10;
-			$comms = "compact [\n\t".join("\n\t", $comms)."\n] $pc%";
-			$fichier = "/* $comms */\n\n".$fichier;
-
-		  	// ecrire
-		  	ecrire_fichier($nom,$fichier);
-		  	// ecrire une version .gz pour content-negociation par apache, cf. [11539]
-		  	ecrire_fichier("$nom.gz",$fichier);
-		  }
-	}
-
-	// Le commentaire detaille n'apparait qu'au recalcul, pour debug
-	return array($nom, $comms ? "<!-- $comms -->\n" : '');
-}
-
-
-// Appelee par compacte_head() si le webmestre le desire, cette fonction
-// compacte les scripts js dans un fichier statique pose dans local/
-// en entree : un <head> html.
-// http://doc.spip.org/@compacte_head_js
-function compacte_head_js($flux) {
-	$url_base = url_de_base();
-	$url_page = substr(generer_url_public('A'), 0, -1);
-	$dir = preg_quote($url_page,',').'|'.preg_quote(preg_replace(",^$url_base,",_DIR_RACINE,$url_page),',');
-
-	$scripts = array();
-	$flux_nocomment = preg_replace(",<!--.*-->,Uims","",$flux);
-	foreach (extraire_balises($flux_nocomment,'script') as $s) {
-		if (extraire_attribut($s, 'type') === 'text/javascript'
-		AND $src = extraire_attribut($s, 'src')
-		AND !strlen(strip_tags($s))
-		AND (
-			preg_match(',^('.$dir.')(.*)$,', $src, $r)
-			OR (
-				// ou si c'est un fichier
-				$src = preg_replace(',^'.preg_quote(url_de_base(),',').',', '', $src)
-				// enlever un timestamp eventuel derriere un nom de fichier statique
-				AND $src2 = preg_replace(",[.]js[?].+$,",'.js',$src)
-				// verifier qu'il n'y a pas de ../ ni / au debut (securite)
-				AND !preg_match(',(^/|\.\.),', substr($src,strlen(_DIR_RACINE)))
-				// et si il est lisible
-				AND @is_readable($src2)
-			)
-		)) {
-			if ($r)
-				$scripts[$s] = explode('&',
-					str_replace('&amp;', '&', $r[2]), 2);
-			else
-				$scripts[$s] = $src;
-		}
-	}
-	if (list($src,$comms,$time) = filtre_cache_static($scripts,'js')){
-		$scripts = array_keys($scripts);
-		$flux = str_replace(reset($scripts),
-			$comms
-			."<script type='text/javascript' src='$src'></script>\n",$flux);
-		$flux = str_replace($scripts,"",$flux);
-	}
-
-	return $flux;
-}
-
-// Appelee par compacte_head() si le webmestre le desire, cette fonction
-// compacte les feuilles de style css dans un fichier statique pose dans local/
-// en entree : un <head> html.
-// http://doc.spip.org/@compacte_head_css
-function compacte_head_css($flux) {
-	$url_base = url_de_base();
-	$url_page = substr(generer_url_public('A'), 0, -1);
-	$dir = preg_quote($url_page,',').'|'.preg_quote(preg_replace(",^$url_base,",_DIR_RACINE,$url_page),',');
-
-	$css = array();
-	$flux_nocomment = preg_replace(",<!--.*-->,Uims","",$flux);
-	foreach (extraire_balises($flux_nocomment, 'link') as $s) {
-		if (extraire_attribut($s, 'rel') === 'stylesheet'
-		AND (!($type = extraire_attribut($s, 'type'))
-			OR $type == 'text/css')
-		AND is_null(extraire_attribut($s, 'name')) # css nommee : pas touche
-		AND is_null(extraire_attribut($s, 'id'))   # idem
-		AND !strlen(strip_tags($s))
-		AND $src = preg_replace(",^$url_base,",_DIR_RACINE,extraire_attribut($s, 'href'))
-		AND (
-			// regarder si c'est du format spip.php?page=xxx
-			preg_match(',^('.$dir.')(.*)$,', $src, $r)
-			OR (
-				// ou si c'est un fichier
-				// enlever un timestamp eventuel derriere un nom de fichier statique
-				$src2 = preg_replace(",[.]css[?].+$,",'.css',$src)
-				// verifier qu'il n'y a pas de ../ ni / au debut (securite)
-				AND !preg_match(',(^/|\.\.),', substr($src2,strlen(_DIR_RACINE)))
-				// et si il est lisible
-				AND @is_readable($src2)
-			)
-		)) {
-			$media = strval(extraire_attribut($s, 'media'));
-			if ($r)
-				$css[$media][$s] = explode('&',
-					str_replace('&amp;', '&', $r[2]), 2);
-			else
-				$css[$media][$s] = $src;
-		}
-	}
-
-	// et mettre le tout dans un cache statique
-	foreach($css as $m=>$s){
-		// si plus d'une css pour ce media ou si c'est une css dynamique
-		if (count($s)>1 OR is_array(reset($s))){
-			if (list($src,$comms) = filtre_cache_static($s,'css')){
-				$s = array_keys($s);
-				$flux = str_replace(reset($s),
-					$comms
-					."<link rel='stylesheet'".($m?" media='$m'":"")." href='$src' type='text/css' />\n",$flux);
-				$flux = str_replace($s,"",$flux);
-			}
-		}
-	}
-
-	return $flux;
-}
-
-// Cette fonction verifie les reglages du site et traite le compactage
-// des css et/ou js d'un <head>
-// un fichier .gz est cree pour chaque, qui peut etre utilise par apache
-// et lui eviter de recompresser a chaque hit, avec les directives suivantes :
-//<IfModule mod_gzip.c>
-//mod_gzip_on                   Yes
-//mod_gzip_can_negotiate        Yes
-//mod_gzip_static_suffix        .gz
-//AddEncoding              gzip .gz
-//mod_gzip_item_include         file       \.(js|css)$
-//</IfModule>
-// http://doc.spip.org/@compacte_head
-function compacte_head($flux){
-	// dans l'espace prive on compacte toujours, c'est concu pour
-	if ($GLOBALS['meta']['auto_compress_css'] == 'oui' OR (test_espace_prive() AND !defined('_INTERDIRE_COMPACTE_HEAD_ECRIRE')))
-		$flux = compacte_head_css($flux);
-	if ($GLOBALS['meta']['auto_compress_js'] == 'oui' OR (test_espace_prive() AND !defined('_INTERDIRE_COMPACTE_HEAD_ECRIRE')))
-		$flux = compacte_head_js($flux);
-	return $flux;
-}
-
-// http://doc.spip.org/@chercher_rubrique
-function chercher_rubrique($msg,$id, $id_parent, $type, $id_secteur, $restreint,$actionable = false, $retour_sans_cadre=false){
-	global $spip_lang_right;
-	include_spip('inc/autoriser');
-	if (intval($id) && !autoriser('modifier', $type, $id))
-		return "";
-	if (!sql_countsel('spip_rubriques'))
-		return "";
-	$chercher_rubrique = charger_fonction('chercher_rubrique', 'inc');
-	$form = $chercher_rubrique($id_parent, $type, $restreint, ($type=='rubrique')?$id:0);
-
-	if ($id_parent == 0) $logo = "racine-site-24.gif";
-	elseif ($id_secteur == $id_parent) $logo = "secteur-24.gif";
-	else $logo = "rubrique-24.gif";
-
-	$confirm = "";
-	if ($type=='rubrique') {
-		// si c'est une rubrique-secteur contenant des breves, demander la
-		// confirmation du deplacement
-		$contient_breves = sql_countsel('spip_breves', "id_rubrique=$id");
-	
-		if ($contient_breves > 0) {
-			$scb = ($contient_breves>1? 's':'');
-			$scb = _T('avis_deplacement_rubrique',
-				array('contient_breves' => $contient_breves,
-				      'scb' => $scb));
-			$confirm .= "\n<div class='confirmer_deplacement verdana2'><div class='choix'><input type='checkbox' name='confirme_deplace' value='oui' id='confirme-deplace' /><label for='confirme-deplace'>" . $scb . "</label></div></div>\n";
-		} else
-			$confirm .= "<input type='hidden' name='confirme_deplace' value='oui' />\n";
-	}
-	$form .= $confirm;
-	if ($actionable){
-		if (strpos($form,'<select')!==false) {
-			$form .= "<div style='text-align: $spip_lang_right;'>"
-				. '<input class="fondo" type="submit" value="'._T('bouton_choisir').'"/>'
-				. "</div>";
-		}
-		$form = "<input type='hidden' name='editer_$type' value='oui' />\n" . $form;
-		$form = generer_action_auteur("editer_$type", $id, self(), $form, " method='post' class='submit_plongeur'");	
-	}
-
-	if ($retour_sans_cadre)
-		return $form;
-		
-	include_spip('inc/presentation');
-	return debut_cadre_couleur($logo, true, "", $msg) . $form .fin_cadre_couleur(true);
-	
-}
-
-// http://doc.spip.org/@barre_typo
-function barre_typo($id,$lang='',$forum=false){
-	include_spip('inc/barre');
-	return '<div>' . afficher_barre("document.getElementById('$id')",$forum,$lang) . '</div>';
-}
 // http://doc.spip.org/@puce_changement_statut
 function puce_changement_statut($id_objet, $statut, $id_rubrique, $type, $ajax=false){
 	$puce_statut = charger_fonction('puce_statut','inc');
-	return $puce_statut($id_objet, $statut, $id_rubrique, $type, $ajax=false);
+	return $puce_statut($id_objet, $statut, $id_rubrique, $type, $ajax);
 }
 
-// Encoder un contexte pour l'ajax, le signer avec une cle, le crypter
-// avec le secret du site, le gziper si possible...
-// l'entree peut etre serialisee (le #ENV** des fonds ajax et ajax_stat)
-// http://doc.spip.org/@encoder_contexte_ajax
-function encoder_contexte_ajax($c,$form='', $emboite=NULL) {
+/**
+ * [(#STATUT|puce_statut{article})] affiche une puce passive
+ * [(#STATUT|puce_statut{article,#ID_ARTICLE,#ID_RUBRIQUE})] affiche une puce avec changement rapide
+ *
+ * utilisable sur tout objet qui a declare
+ * @param string $statut
+ * @param string $objet
+ * @param int $id_objet
+ * @param int $id_parent
+ * @return string
+ */
+function filtre_puce_statut_dist($statut,$objet,$id_objet=0,$id_parent=0){
+	static $puce_statut = null;
+	if (!$puce_statut)
+		$puce_statut = charger_fonction('puce_statut','inc');
+	return $puce_statut($id_objet, $statut, $id_parent, $objet, false, objet_info($objet,'editable')?_ACTIVER_PUCE_RAPIDE:false);
+}
+
+
+/**
+ * Encoder un contexte pour l'ajax, le signer avec une cle, le crypter
+ * avec le secret du site, le gziper si possible...
+ * l'entree peut etre serialisee (le #ENV** des fonds ajax et ajax_stat)
+ *
+ * http://doc.spip.org/@encoder_contexte_ajax
+ *
+ * @param string|array $c
+ *   contexte, peut etre un tableau serialize
+ * @param string $form
+ *   nom du formulaire eventuel
+ * @param string $emboite
+ *   contenu a emboiter dans le conteneur ajax
+ * @param string $ajaxid
+ *   ajaxid pour cibler le bloc et forcer sa mise a jour
+ * @return string
+ */
+function encoder_contexte_ajax($c,$form='', $emboite=NULL, $ajaxid='') {
 	if (is_string($c)
-	AND !is_null(@unserialize($c)))
+	AND !is_null(@unserialize($c))) {
 		$c = unserialize($c);
+	}
 
 	// supprimer les parametres debut_x
 	// pour que la pagination ajax ne soit pas plantee
 	// si on charge la page &debut_x=1 : car alors en cliquant sur l'item 0,
 	// le debut_x=0 n'existe pas, et on resterait sur 1
-	foreach ($c as $k => $v)
-		if (strpos($k,'debut_') === 0)
+	foreach ($c as $k => $v) {
+		if (strpos($k,'debut_') === 0) {
 			unset($c[$k]);
-
-	include_spip("inc/securiser_action");
+		}
+	}
+	
+	if (!function_exists('calculer_cle_action'))
+		include_spip("inc/securiser_action");
 	$cle = calculer_cle_action($form.(is_array($c)?serialize($c):$c));
 	$c = serialize(array($c,$cle));
-	if (function_exists('gzdeflate') && function_exists('gzinflate'))
-		$c = gzdeflate($c);
-	$c = _xor($c);
-	$c = base64_encode($c);
-	if ($emboite === NULL) return $c;
-	return !trim($emboite) ? '' :  
-	"<div class='ajaxbloc env-$c'>\n$emboite</div><!-- ajaxbloc -->\n";
+
+	// on ne stocke pas les contextes dans des fichiers caches
+	// par defaut, sauf si cette configuration a ete forcee
+	// OU que la longueur de l''argument generee est plus long
+	// que ce que telere Suhosin.
+	$cache_contextes_ajax = (defined('_CACHE_CONTEXTES_AJAX') AND _CACHE_CONTEXTES_AJAX);
+	if (!$cache_contextes_ajax) {
+		$env = $c;
+		if (function_exists('gzdeflate') && function_exists('gzinflate')) {
+			$env = gzdeflate($env);
+			// http://core.spip.org/issues/2667 | https://bugs.php.net/bug.php?id=61287
+			if (substr(phpversion(),0,5) == '5.4.0' AND !@gzinflate($env)) {
+				$cache_contextes_ajax = true;
+				spip_log("Contextes AJAX forces en fichiers ! Erreur PHP 5.4.0", _LOG_AVERTISSEMENT);
+			}
+		}
+		$env = _xor($env);
+		$env = base64_encode($env);
+		// tester Suhosin et la valeur maximale des variables en GET...
+		if ($max_len = @ini_get('suhosin.get.max_value_length')
+		and $max_len < ($len = strlen($env))) {
+			$cache_contextes_ajax = true;
+			spip_log("Contextes AJAX forces en fichiers !"
+				. " Cela arrive lorsque la valeur du contexte"
+				. " depasse la longueur maximale autorisee par Suhosin"
+				. " ($max_len) dans 'suhosin.get.max_value_length'. Ici : $len."
+				. " Vous devriez modifier les parametres de Suhosin"
+				. " pour accepter au moins 1024 caracteres.", _LOG_AVERTISSEMENT);
+		}
+	}
+	
+	if ($cache_contextes_ajax) {
+		$dir = sous_repertoire(_DIR_CACHE, 'contextes');
+		// stocker les contextes sur disque et ne passer qu'un hash dans l'url
+		$md5 = md5($c);
+		ecrire_fichier("$dir/c$md5",$c);
+		$env = $md5;
+	} 
+	
+	if ($emboite === NULL) return $env;
+	if (!trim($emboite)) return "";
+	// toujours encoder l'url source dans le bloc ajax
+	$r = self();
+	$r = ' data-origin="'.$r.'"';
+	$class = 'ajaxbloc';
+	if ($ajaxid AND is_string($ajaxid)){
+		$class .= ' ajax-id-'.$ajaxid;
+	}
+	return "<div class='$class' "."data-ajax-env='$env'$r>\n$emboite</div><!--ajaxbloc-->\n";
 }
 
 // la procedure inverse de encoder_contexte_ajax()
 // http://doc.spip.org/@decoder_contexte_ajax
 function decoder_contexte_ajax($c,$form='') {
-	include_spip("inc/securiser_action");
-
-	$c = @base64_decode($c);
-	$c = _xor($c);
-	if (function_exists('gzdeflate') && function_exists('gzinflate'))
-		$c = @gzinflate($c);
+	if (!function_exists('calculer_cle_action'))
+		include_spip("inc/securiser_action");
+	if (( (defined('_CACHE_CONTEXTES_AJAX') AND _CACHE_CONTEXTES_AJAX) OR strlen($c)==32)
+		AND $dir = sous_repertoire(_DIR_CACHE, 'contextes')
+		AND lire_fichier("$dir/c$c",$contexte)) {
+			$c = $contexte;
+	} else {
+		$c = @base64_decode($c);
+		$c = _xor($c);
+		if (function_exists('gzdeflate') && function_exists('gzinflate'))
+			$c = @gzinflate($c);
+	}
 	list($env, $cle) = @unserialize($c);
 
 	if ($cle == calculer_cle_action($form.(is_array($env)?serialize($env):$env)))
@@ -2660,7 +2587,8 @@ function decoder_contexte_ajax($c,$form='') {
 // http://doc.spip.org/@_xor
 function _xor($message, $key=null){
 	if (is_null($key)) {
-		include_spip("inc/securiser_action");
+		if (!function_exists('calculer_cle_action'))
+			include_spip("inc/securiser_action");
 		$key = pack("H*", calculer_cle_action('_xor'));
 	}
 
@@ -2670,6 +2598,161 @@ function _xor($message, $key=null){
 		$message[$i] = ~($message[$i]^$key[$i%$keylen]);
 
 	return $message;
+}
+
+// Les vrai fonctions sont dans le plugin forum, mais on evite ici une erreur du compilateur
+// en absence du plugin
+function url_reponse_forum($texte){return $texte;}
+function url_rss_forum($texte){return $texte;}
+
+
+/**
+ * une fonction pour generer des menus avec liens
+ * ou un <strong class='on'> non clicable lorsque l'item est selectionne
+ *
+ * @param string $url
+ * @param string $libelle
+ *   le texte du lien
+ * @param bool $on
+ *   etat expose (genere un strong) ou non (genere un lien)
+ * @param string $class
+ * @param string $title
+ * @param string $rel
+ * @param string $evt
+ *   complement a la balise a pour gerer un evenement javascript, de la forme " onclick='...'"
+ * @return string
+ */
+function lien_ou_expose($url,$libelle=NULL,$on=false,$class="",$title="",$rel="", $evt=''){
+	if ($on) {
+		$bal = "strong";
+		$att = "class='on'";
+	} else {
+		$bal = 'a';
+		$att = "href='$url'"
+	  	.($title?" title='".attribut_html($title)."'":'')
+	  	.($class?" class='".attribut_html($class)."'":'')
+	  	.($rel?" rel='".attribut_html($rel)."'":'')
+		.$evt;
+	}
+	if ($libelle === NULL)
+		$libelle = $url;
+	return "<$bal $att>$libelle</$bal>";
+}
+
+
+/**
+ * Afficher un message "un truc"/"N trucs"
+ * Les items sont à indiquer comme pour la fonction _T() sous la forme :
+ * "module:chaine"
+ *
+ * @param int $nb : le nombre
+ * @param string $chaine_un : l'item de langue si $nb vaut un 
+ * @param string $chaine_plusieurs : l'item de lanque si $nb > 1 
+ * @param string $var : La variable à remplacer par $nb dans l'item de langue (facultatif, défaut "nb")
+ * @param array $vars : Les autres variables nécessaires aux chaines de langues (facultatif)
+ * @return string : la chaine de langue finale en utilisant la fonction _T()
+ */
+function singulier_ou_pluriel($nb,$chaine_un,$chaine_plusieurs,$var='nb',$vars=array()){
+	if (!$nb=intval($nb)) return "";
+	if (!is_array($vars)) return "";
+	$vars[$var] = $nb;
+	if ($nb>1) return _T($chaine_plusieurs, $vars);
+	else return _T($chaine_un,$vars);
+}
+
+
+/**
+ * Fonction de base pour une icone dans un squelette
+ * structure html : <span><a><img><b>texte</b></span>
+ *
+ * @param string $type
+ *  'lien' ou 'bouton'
+ * @param string $lien
+ *  url
+ * @param string $texte
+ *  texte du lien / alt de l'image
+ * @param string $fond
+ *  objet avec ou sans son extension et sa taille (article, article-24, article-24.png)
+ * @param string $fonction
+ *  new/del/edit
+ * @param string $class
+ *  classe supplementaire (horizontale, verticale, ajax ...)
+ * @param string $javascript
+ *  "onclick='...'" par exemple
+ * @return string 
+ */
+function prepare_icone_base($type, $lien, $texte, $fond, $fonction="", $class="",$javascript=""){
+	if (in_array($fonction,array("del","supprimer.gif")))
+		$class .= ' danger';
+	elseif ($fonction == "rien.gif")
+		$fonction = "";
+	elseif ($fonction == "delsafe")
+		$fonction = "del";
+
+	// remappage des icone : article-24.png+new => article-new-24.png
+	if ($icone_renommer = charger_fonction('icone_renommer','inc',true))
+		list($fond,$fonction) = $icone_renommer($fond,$fonction);
+
+	// ajouter le type d'objet dans la class de l'icone
+	$class .= " " . substr(basename($fond),0,-4);
+
+	$alt = attribut_html($texte);
+	$title = " title=\"$alt\""; // est-ce pertinent de doubler le alt par un title ?
+
+	$ajax = "";
+	if (strpos($class,"ajax")!==false) {
+			$ajax="ajax";
+		if (strpos($class,"preload")!==false)
+			$ajax.=" preload";
+		if (strpos($class,"nocache")!==false)
+			$ajax.=" nocache";
+		$ajax=" class='$ajax'";
+	}
+
+	$size = 24;
+	if (preg_match("/-([0-9]{1,3})[.](gif|png)$/i",$fond,$match))
+		$size = $match[1];
+
+	if ($fonction){
+		// 2 images pour composer l'icone : le fond (article) en background,
+		// la fonction (new) en image
+		$icone = http_img_pack($fonction, $alt, "width='$size' height='$size'\n" .
+					http_style_background($fond));
+	}
+	else {
+		$icone = http_img_pack($fond, $alt, "width='$size' height='$size'");
+	}
+
+	if ($type=='lien')
+		return "<span class='icone s$size $class'>"
+		. "<a href='$lien'$title$ajax$javascript>"
+		. $icone
+		. "<b>$texte</b>"
+		. "</a></span>\n";
+
+	else
+		return bouton_action("$icone<b>$texte</b>",$lien,"icone s$size $class",$javascript,$alt);
+}
+
+function icone_base($lien, $texte, $fond, $fonction="", $class="",$javascript=""){
+	return prepare_icone_base('lien', $lien, $texte, $fond, $fonction, $class, $javascript);
+}
+function filtre_icone_verticale_dist($lien, $texte, $fond, $fonction="", $class="",$javascript=""){
+	return icone_base($lien,$texte,$fond,$fonction,"verticale $class",$javascript);
+}
+function filtre_icone_horizontale_dist($lien, $texte, $fond, $fonction="", $class="",$javascript=""){
+	return icone_base($lien,$texte,$fond,$fonction,"horizontale $class",$javascript);
+}
+
+function filtre_bouton_action_horizontal_dist($lien, $texte, $fond, $fonction="", $class="",$confirm=""){
+	return prepare_icone_base('bouton', $lien, $texte, $fond, $fonction, "horizontale $class", $confirm);
+}
+/*
+ * Filtre icone pour compatibilite
+ * mappe sur icone_base
+ */
+function filtre_icone_dist($lien, $texte, $fond, $align="", $fonction="", $class="",$javascript=""){
+	return icone_base($lien,$texte,$fond,$fonction,"verticale $align $class",$javascript);
 }
 
 
@@ -2691,20 +2774,535 @@ function filtre_explode_dist($a,$b){return explode($b,$a);}
  * @param string $b
  * @return string
  */
-function filtre_implode_dist($a,$b){return implode($b,$a);}
+function filtre_implode_dist($a,$b){return is_array($a)?implode($b,$a):$a;}
 
-/*
- * Deux verrues pour que le pipeline de revisions soit correct
- * elles vont sauter quand ca passera en plugin
+/**
+ * Produire les styles prives qui associent item de menu avec icone en background
+ * @return string
  */
-function premiere_revision($x) {
-	include_spip('inc/revisions');
-	return enregistrer_premiere_revision($x);
-}
-function nouvelle_revision($x) {
-	include_spip('inc/revisions');
-	return enregistrer_nouvelle_revision($x);
+function bando_images_background(){
+	include_spip('inc/bandeau');
+	// recuperer tous les boutons et leurs images
+	$boutons = definir_barre_boutons(definir_barre_contexte(),true,false);
+
+	$res = "";
+	foreach($boutons as $page => $detail){
+		if ($detail->icone AND strlen(trim($detail->icone)))
+			$res .="\n.navigation_avec_icones #bando1_$page {background-image:url(".$detail->icone.");}";
+		$selecteur = (in_array($page,array('outils_rapides','outils_collaboratifs'))?"":".navigation_avec_icones ");
+		if (is_array($detail->sousmenu))
+			foreach($detail->sousmenu as $souspage=>$sousdetail)
+				if ($sousdetail->icone AND strlen(trim($sousdetail->icone)))
+					$res .="\n$selecteur.bando2_$souspage {background-image:url(".$sousdetail->icone.");}";
+	}
+	return $res;
 }
 
+/**
+ * Generer un bouton_action
+ * utilise par #BOUTON_ACTION
+ *
+ * @param string $libelle
+ * @param string $url
+ * @param string $class
+ * @param string $confirm
+ *   message de confirmation oui/non avant l'action
+ * @param string $title
+ * @param string $callback
+ *   callback js a appeler lors de l'evenement action (apres confirmation eventuelle si $confirm est non vide)
+ *   et avant execution de l'action. Si la callback renvoie false, elle annule le declenchement de l'action
+ * @return string
+ */
+function bouton_action($libelle, $url, $class="", $confirm="", $title="", $callback=""){
+	if ($confirm) {
+		$confirm = "confirm(\"" . attribut_html($confirm) . "\")";
+	  if ($callback)
+		  $callback = "$confirm?($callback):false";
+	  else
+		  $callback = $confirm;
+	}
+	$onclick = $callback?" onclick='return ".addcslashes($callback,"'")."'":"";
+	$title = $title ? " title='$title'" : "";
+	return "<form class='bouton_action_post $class' method='post' action='$url'><div>".form_hidden($url)
+		."<button type='submit' class='submit'$title$onclick>$libelle</button></div></form>";
+}
+
+
+/**
+ * Proteger les champs passes dans l'url et utiliser dans {tri ...}
+ * preserver l'espace pour interpreter ensuite num xxx et multi xxx
+ * @param string $t
+ * @return string
+ */
+function tri_protege_champ($t){
+	return preg_replace(',[^\s\w.+],','',$t);
+}
+
+/**
+ * Interpreter les multi xxx et num xxx utilise comme tri
+ * pour la clause order
+ * 'multi xxx' devient simplement 'multi' qui est calcule dans le select
+ * @param string $t
+ * @param array $from
+ * @return string
+ */
+function tri_champ_order($t, $from=null){
+	if(strncmp($t,'multi ',6)==0){
+		return "multi";
+	}
+
+	$champ = $t;
+
+	if (strncmp($t,'num ',4)==0)
+		$champ = substr($t,4);
+	// enlever les autres espaces non evacues par tri_protege_champ
+	$champ = preg_replace(',\s,','',$champ);
+
+	if (is_array($from)){
+		$trouver_table = charger_fonction('trouver_table','base');
+		foreach($from as $idt=>$table_sql){
+			if ($desc = $trouver_table($table_sql)
+				AND isset($desc['field'][$champ])){
+				$champ = "$idt.$champ";
+				break;
+			}
+		}
+	}
+	if (strncmp($t,'num ',4)==0)
+		return "0+$champ";
+	else
+		return $champ;
+}
+
+/**
+ * Interpreter les multi xxx et num xxx utilise comme tri
+ * pour la clause select
+ * 'multi xxx' devient select "...." as multi
+ * les autres cas ne produisent qu'une chaine vide '' en select
+ * 'hasard' devient 'rand() AS hasard' dans le select
+ *
+ * @param string $t
+ * @return string
+ */
+function tri_champ_select($t){
+	if(strncmp($t,'multi ',6)==0){
+		$t = substr($t,6);
+		$t = preg_replace(',\s,','',$t);
+		$t = sql_multi($t,$GLOBALS['spip_lang']);
+		return $t;
+	}
+	if(trim($t)=='hasard'){
+		return 'rand() AS hasard';
+	}
+	return "''";
+}
+
+
+/**
+ * Donner n'importe quelle information sur un objet de maniere generique.
+ *
+ * La fonction va gerer en interne deux cas particuliers les plus utilises :
+ * l'URL et le titre (qui n'est pas forcemment le champ SQL "titre").
+ *
+ * On peut ensuite personnaliser les autres infos en creant une fonction
+ * generer_<nom_info>_entite($id_objet, $type_objet, $ligne).
+ * $ligne correspond a la ligne SQL de tous les champs de l'objet, les fonctions
+ * de personnalisation n'ont donc pas a refaire de requete.
+ *
+ * @param int $id_objet
+ * @param string $type_objet
+ * @param string $info
+ * @param string $etoile
+ * @return string
+ */
+function generer_info_entite($id_objet, $type_objet, $info, $etoile=""){
+	global $table_des_traitements;
+	static $trouver_table=null;
+	static $objets;
+
+	// On verifie qu'on a tout ce qu'il faut
+	$id_objet = intval($id_objet);
+	if (!($id_objet and $type_objet and $info))
+		return '';
+
+	// si on a deja note que l'objet n'existe pas, ne pas aller plus loin
+	if (isset($objets[$type_objet]) AND $objets[$type_objet]===false)
+		return '';
+
+	// Si on demande l'url, on retourne direct la fonction
+	if ($info == 'url')
+		return generer_url_entite($id_objet, $type_objet);
+
+	// Sinon on va tout chercher dans la table et on garde en memoire
+	$demande_titre = ($info == 'titre');
+
+	// On ne fait la requete que si on a pas deja l'objet ou si on demande le titre mais qu'on ne l'a pas encore
+	if (!isset($objets[$type_objet][$id_objet])
+	  OR
+	  ($demande_titre AND !isset($objets[$type_objet][$id_objet]['titre']))
+	  ){
+		if (!$trouver_table)
+			$trouver_table = charger_fonction('trouver_table','base');
+		$desc = $trouver_table(table_objet_sql($type_objet));
+		if (!$desc)
+			return $objets[$type_objet] = false;
+
+		// Si on demande le titre, on le gere en interne
+		$champ_titre = "";
+		if ($demande_titre){
+			// si pas de titre declare mais champ titre, il sera peuple par le select *
+			$champ_titre = (!empty($desc['titre'])) ? ', ' . $desc['titre']:'';
+		}
+		include_spip('base/abstract_sql');
+		include_spip('base/connect_sql');
+		$objets[$type_objet][$id_objet] = sql_fetsel(
+			'*'.$champ_titre,
+			$desc['table_sql'],
+			id_table_objet($type_objet).' = '.intval($id_objet)
+		);
+	}
+
+	// Si la fonction generer_TRUC_TYPE existe, on l'utilise pour formater $info_generee
+	if ($generer = charger_fonction("generer_${info}_${type_objet}", '', true))
+		$info_generee = $generer($id_objet, $objets[$type_objet][$id_objet]);
+	// Si la fonction generer_TRUC_entite existe, on l'utilise pour formater $info_generee
+	else if ($generer = charger_fonction("generer_${info}_entite", '', true))
+		$info_generee = $generer($id_objet, $type_objet, $objets[$type_objet][$id_objet]);
+	// Sinon on prend directement le champ SQL tel quel
+	else
+		$info_generee = (isset($objets[$type_objet][$id_objet][$info])?$objets[$type_objet][$id_objet][$info]:'');
+
+	// On va ensuite chercher les traitements automatiques a faire
+	$champ = strtoupper($info);
+	$traitement = isset($table_des_traitements[$champ]) ? $table_des_traitements[$champ] : false;
+	$table_sql = table_objet_sql($type_objet);
+
+	if (!$etoile
+		AND is_array($traitement)
+	  AND (isset($traitement[$table_sql]) OR isset($traitement[0]))){
+	  	include_spip('inc/texte');
+		$traitement = $traitement[isset($traitement[$table_sql]) ? $table_sql : 0];
+		$traitement = str_replace('%s', "'".texte_script($info_generee)."'", $traitement);
+		// FIXME: $connect et $Pile[0] font souvent partie des traitements.
+		// on les definit pour eviter des notices, mais ce fonctionnement est a ameliorer !
+		$connect = ""; $Pile = array(0 => array('id_objet'=>$id_objet,'objet'=>$type_objet));
+		eval("\$info_generee = $traitement;");
+	}
+
+	return $info_generee;
+}
+
+/**
+ * Wrap un texte avec des balises
+ * wrap('mot','<b>') => '<b>mot</b>'
+ * @param string $texte
+ * @param string $wrap
+ * @return string
+ */
+function wrap($texte,$wrap) {
+	$balises = extraire_balises($wrap);
+	if (preg_match_all(",<([a-z]\w*)\b[^>]*>,UimsS",$wrap, $regs, PREG_PATTERN_ORDER)) {
+		$texte = $wrap . $texte;
+		$regs = array_reverse($regs[1]);
+		$wrap = "</".implode("></",$regs).">";
+		$texte = $texte . $wrap;
+	}
+	return $texte;
+}
+
+
+/**
+ * afficher proprement n'importe quoi
+ * On affiche in fine un pseudo-yaml qui premet de lire humainement les tableaux et de s'y reperer
+ *
+ * Les textes sont retournes avec simplement mise en forme typo
+ *
+ * le $join sert a separer les items d'un tableau, c'est en general un \n ou <br /> selon si on fait du html ou du texte
+ * les tableaux-listes (qui n'ont que des cles numeriques), sont affiches sous forme de liste separee par des virgules :
+ * c'est VOULU !
+ *
+ * @param $u
+ * @param string $join
+ * @param int $indent
+ * @return array|mixed|string
+ */
+function filtre_print_dist($u, $join="<br />", $indent=0) {
+	if (is_string($u)){
+		$u = typo($u);
+		return $u;
+	}
+
+	// caster $u en array si besoin
+	if (is_object($u))
+		$u = (array) $u;
+
+	if (is_array($u)){
+		$out = "";
+		// toutes les cles sont numeriques ?
+		// et aucun enfant n'est un tableau
+		// liste simple separee par des virgules
+		$numeric_keys = array_map('is_numeric',array_keys($u));
+		$array_values = array_map('is_array',$u);
+		$object_values = array_map('is_object',$u);
+		if (array_sum($numeric_keys)==count($numeric_keys)
+		  AND !array_sum($array_values)
+		  AND !array_sum($object_values)){
+			return join(", ", array_map('filtre_print_dist', $u));
+		}
+
+		// sinon on passe a la ligne et on indente
+		$i_str = str_pad("",$indent," ");
+		foreach($u as $k => $v){
+			$out .= $join . $i_str . "$k: " . filtre_print_dist($v,$join,$indent+2);
+		}
+		return $out;
+	}
+
+	// on sait pas quoi faire...
+	return $u;
+}
+
+
+/**
+ * Renvoyer l'info d'un objet
+ * telles que definies dans declarer_tables_objets_sql
+ *
+ * @param string $objet
+ * @param string $info
+ * @return string
+ */
+function objet_info($objet,$info){
+	$table = table_objet_sql($objet);
+	$infos = lister_tables_objets_sql($table);
+	return (isset($infos[$info])?$infos[$info]:'');
+}
+
+/**
+ * Filtre pour afficher 'Aucun truc' ou '1 truc' ou 'N trucs'
+ * avec la bonne chaine de langue en fonction de l'objet utilise
+ * @param  $nb
+ * @param  $objet
+ * @return mixed|string
+ */
+function objet_afficher_nb($nb, $objet){
+	if (!$nb)
+		return _T(objet_info($objet,'info_aucun_objet'));
+	else
+		return _T(objet_info($objet,$nb==1?'info_1_objet':'info_nb_objets'),array('nb'=>$nb));
+}
+
+/**
+ * Filtre pour afficher l'img icone d'un objet
+ *
+ * @param string $objet
+ * @param int $taille
+ * @return string
+ */
+function objet_icone($objet,$taille=24){
+	$icone = objet_info($objet,'icone_objet')."-".$taille.".png";
+	$icone = chemin_image($icone);
+	$balise_img = charger_filtre('balise_img');
+	return $icone?$balise_img($icone,_T(objet_info($objet,'texte_objet'))):'';
+}
+
+/**
+ * Fonction de secours pour inserer le head_css de facon conditionnelle
+ * 
+ * Appelée en filtre sur le squelette qui contient #INSERT_HEAD,
+ * elle vérifie l'absence éventuelle de #INSERT_HEAD_CSS et y suplée si besoin
+ * pour assurer la compat avec les squelettes qui n'utilisent pas.
+ * 
+ * @param string $flux Code HTML
+ * @return string      Code HTML
+ */
+function insert_head_css_conditionnel($flux){
+	if (strpos($flux,'<!-- insert_head_css -->')===false
+		AND $p=strpos($flux,'<!-- insert_head -->')){
+		// plutot avant le premier js externe (jquery) pour etre non bloquant
+		if ($p1 = stripos($flux,'<script src=') AND $p1<$p)
+			$p = $p1;
+		$flux = substr_replace($flux,pipeline('insert_head_css','<!-- insert_head_css -->'),$p,0);
+	}
+	return $flux;
+}
+
+/**
+ * Produire un fichier statique a partir d'un squelette dynamique
+ * Permet ensuite a apache de le servir en statique sans repasser
+ * par spip.php a chaque hit sur le fichier
+ * si le format (css ou js) est passe dans contexte['format'], on l'utilise
+ * sinon on regarde si le fond finit par .css ou .js
+ * sinon on utilie "html"
+ *
+ * @param string $fond
+ * @param array $contexte
+ * @param array $options
+ * @param string $connect
+ * @return string
+ */
+function produire_fond_statique($fond, $contexte=array(), $options = array(), $connect=''){
+	if (isset($contexte['format'])){
+		$extension = $contexte['format'];
+		unset($contexte['format']);
+	}
+	else {
+		$extension = "html";
+		if (preg_match(',[.](css|js|json)$,',$fond,$m))
+			$extension = $m[1];
+	}
+	// recuperer le contenu produit par le squelette
+	$options['raw'] = true;
+	$cache = recuperer_fond($fond,$contexte,$options,$connect);
+	
+	// calculer le nom de la css
+	$dir_var = sous_repertoire (_DIR_VAR, 'cache-'.$extension);
+	$nom_safe = preg_replace(",\W,",'_',str_replace('.','_',$fond));
+	$filename = $dir_var . $extension."dyn-$nom_safe-".substr(md5($fond.serialize($contexte).$connect),0,8) .".$extension";
+
+	// mettre a jour le fichier si il n'existe pas
+	// ou trop ancien
+	// le dernier fichier produit est toujours suffixe par .last
+	// et recopie sur le fichier cible uniquement si il change
+	if (!file_exists($filename)
+		OR !file_exists($filename.".last")
+		OR (isset($cache['lastmodified']) AND $cache['lastmodified'] AND filemtime($filename.".last")<$cache['lastmodified'])
+		OR (defined('_VAR_MODE') AND _VAR_MODE=='recalcul')) {
+		$contenu = $cache['texte'];
+		// passer les urls en absolu si c'est une css
+		if ($extension=="css")
+			$contenu = urls_absolues_css($contenu, test_espace_prive()?generer_url_ecrire('accueil'):generer_url_public($fond));
+		
+		// ne pas insérer de commentaire si c'est du json
+		if ($extension!="json") {
+			$comment = "/* #PRODUIRE{fond=$fond";
+			foreach($contexte as $k=>$v)
+				$comment .= ",$k=$v";
+			// pas de date dans le commentaire car sinon ca invalide le md5 et force la maj
+			// mais on peut mettre un md5 du contenu, ce qui donne un aperu rapide si la feuille a change ou non
+			$comment .="}\n   md5:".md5($contenu)." */\n";
+		}
+		// et ecrire le fichier
+		ecrire_fichier($filename.".last",$comment.$contenu);
+		// regarder si on recopie
+		if (!file_exists($filename)
+		  OR md5_file($filename)!==md5_file($filename.".last")){
+			@copy($filename.".last",$filename);
+			spip_clearstatcache(true,$filename); // eviter que PHP ne reserve le vieux timestamp
+		}
+	}
+	
+	return $filename;
+}
+
+/**
+ * Ajouter un timestamp a une url de fichier
+ * [(#CHEMIN{monfichier}|timestamp)]
+ *
+ * @param string $fichier
+ * @return string
+ */
+function timestamp($fichier){
+	if (!$fichier OR !file_exists($fichier)) return $fichier;
+	$m = filemtime($fichier);
+	return "$fichier?$m";
+}
+
+/**
+ * Nettoyer le titre d'un email
+ * eviter une erreur lorsqu'on utilise |nettoyer_titre_email dans un squelette de mail
+ * @param  $titre
+ * @return mixed
+ */
+function filtre_nettoyer_titre_email_dist($titre){
+	include_spip('inc/envoyer_mail');
+	return nettoyer_titre_email($titre);
+}
+
+/**
+ * Afficher le sélecteur de rubrique
+ *
+ * Il permet de placer un objet dans la hiérarchie des rubriques de SPIP
+ *
+ * @param string $titre
+ * @param int $id_objet
+ * @param int $id_parent
+ * @param string $objet
+ * @param int $id_secteur
+ * @param bool $restreint
+ * @param bool $actionable
+ *   true : fournit le selecteur dans un form directement postable
+ * @param bool $retour_sans_cadre
+ * @return string
+ */
+function filtre_chercher_rubrique_dist($titre,$id_objet, $id_parent, $objet, $id_secteur, $restreint,$actionable = false, $retour_sans_cadre=false){
+	include_spip('inc/filtres_ecrire');
+	return chercher_rubrique($titre,$id_objet, $id_parent, $objet, $id_secteur, $restreint,$actionable, $retour_sans_cadre);
+}
+
+/**
+ * Rediriger une page suivant une autorisation,
+ * et ce, n'importe où dans un squelette, même dans les inclusions.
+ * Exemple :
+ * [(#AUTORISER{non}|sinon_interdire_acces)]
+ * [(#AUTORISER{non}|sinon_interdire_acces{#URL_PAGE{login}, 401})]
+ *
+ * @param bool $ok Indique si l'on doit rediriger ou pas
+ * @param string $url Adresse vers laquelle rediriger
+ * @param int $statut Statut HTML avec lequel on redirigera
+ * @return string
+ */
+function sinon_interdire_acces($ok=false, $url='', $statut=0){
+	if ($ok) return '';
+	
+	// Vider tous les tampons
+	$level = @ob_get_level();
+	while ($level--)
+		@ob_end_clean();
+	
+	include_spip('inc/headers');
+	$statut = intval($statut);
+	
+	// Si aucun argument on essaye de deviner quoi faire par défaut
+	if (!$url and !$statut){
+		// Si on est dans l'espace privé, on génère du 403 Forbidden
+		if (test_espace_prive()){
+			http_status(403);
+			$echec = charger_fonction('403','exec');
+			$echec();
+		}
+		// Sinon dans l'espace public on redirige vers une 404 par défaut, car elle toujours présente normalement
+		else{
+			$statut = 404;
+		}
+	}
+	
+	// On suit les directives indiquées dans les deux arguments
+	
+	// S'il y a un statut
+	if ($statut){
+		// Dans tous les cas on modifie l'entité avec ce qui est demandé
+		http_status($statut);
+		// Si le statut est une erreur et qu'il n'y a pas de redirection on va chercher le squelette du même nom
+		if ($statut >= 400 and !$url)
+			echo recuperer_fond("$statut");
+	}
+	
+	// S'il y a une URL, on redirige (si pas de statut, la fonction mettra 302 par défaut)
+	if ($url) redirige_par_entete($url, '', $statut);
+	
+	exit;
+}
+
+/**
+ * Assurer le fonctionnement de |compacte meme sans l'extension compresseur
+ * @param string $source
+ * @param null|string $format
+ * @return string
+ */
+function filtre_compacte_dist($source, $format = null){
+	if (function_exists('compacte'))
+		return compacte($source, $format);
+	return $source;
+}
 
 ?>

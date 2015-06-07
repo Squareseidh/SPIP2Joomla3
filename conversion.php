@@ -98,6 +98,7 @@
     $listarticles  = '' ;  // On prépare le texte à injecter dans la page web
     foreach($articles as $element)
     {  
+        
         $texte=formatSPIPtoJoomla($element->texte);
         $nouvelid=$idMaxArticleJoomla[0]->idmax+$element->id_article;
         $nouvelidRub=$idMaxCategJoomla[0]->idmax+$element->id_rubrique;
@@ -106,26 +107,34 @@
         if (preg_match_all('/<(doc|img)([0-9]+)\|[a-zA-Z0-9_-]*>/', $texte, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $regs) {
                 
+                
                 $documentlié=afficheDocumentById($bdSPIP,$prefixeSPIP,$regs[2]);
                 
                 if(!empty($documentlié)){
                     $path=$documentlié[0]->fichier;
+                    $extension=$documentlié[0]->extension;
                 
                     if($regs[1]=='doc'){
                         $titre=preg_match_all('/[a-z]+\/([a-zA-Z0-9_-]*)/', $path, $matchesTitres, PREG_SET_ORDER);
                         if(!empty($matchesTitres[0])){
-                          $lien='<a href='.$path.'>'.$matchesTitres[0][1].'</a>'; 
+                            if($extension=="pdf"){
+                                $lien='{pdf='.$path.'|600|400}<br>'; //A CHANGER SI VOUS NE VOULEZ PAS UTILISER L EXTENSION PDF EMBED DE JOOMLA
+                            } else {
+                                $lien='<a href='.$path.'>'.$matchesTitres[0][1].'</a><br>'; 
+                            }
                         } else {
-                          $lien='<a href='.$path.'>Document</a>';  
+                          $lien='<a href='.$path.'>Document</a><br>';  
                         } 
                     } else {
-                        $lien='<img src='.$path.'></img>';
+                        $lien='<img src='.$path.'></img><br>';
                     }
                 
-                    $texte = preg_replace('/<(doc|img)([0-9]+)\|[a-zA-Z0-9_-]*>/', $lien, $texte);
+                    $texte = preg_replace('/<(doc|img)('.$regs[2].')\|[a-zA-Z0-9_-]*>/', $lien, $texte);
                 }
             }
         }
+        
+        
         
         $listarticles .= '<tr>'.'<td>'.$element->id_article.'</td><td>'.$nouvelid.'</td><td>'.$element->titre."</td><td>".$element->id_rubrique."</td><td>".$nouvelidRub."</td><td>".$texte."</td><td>".$element->date."</td><td>".$element->visites."</td><td>".$element->date_modif.'</td></tr>' ;
     }
