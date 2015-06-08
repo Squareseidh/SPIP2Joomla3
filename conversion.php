@@ -72,6 +72,7 @@
     {  
         $texte=formatSPIPtoJoomla($element->texte);
         $nouvelid=$idMaxCategJoomla[0]->idmax+$element->id_rubrique;
+        $texte=formatLinktoJoomla($texte,$idMaxArticleJoomla,$idMaxCategJoomla, $bdSPIP,$prefixeSPIP);
         
         if(empty($element->descriptif)){
             $description=$texte;
@@ -84,6 +85,8 @@
         } else {
             $nouvelidparent=$idMaxCategJoomla[0]->idmax+$element->id_parent;
         }
+        
+        
         
         $listrubriques .= '<tr>'.'<td>'.$element->id_rubrique.'</td><td>'.$nouvelid.'</td><td>'.$element->id_parent."</td><td>".$nouvelidparent."</td><td>".$element->titre."</td><td>".$description."</td><td>".$element->date."</td><td>".$element->maj.'</td></tr>' ;
     }
@@ -100,6 +103,7 @@
     {  
         
         $texte=formatSPIPtoJoomla($element->texte);
+        $texte=formatLinktoJoomla($texte,$idMaxArticleJoomla,$idMaxCategJoomla,$bdSPIP,$prefixeSPIP);
         $nouvelid=$idMaxArticleJoomla[0]->idmax+$element->id_article;
         $nouvelidRub=$idMaxCategJoomla[0]->idmax+$element->id_rubrique;
         

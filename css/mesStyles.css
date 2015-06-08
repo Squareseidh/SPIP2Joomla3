@@ -32,3 +32,19 @@ h1 {
 .table-bordered > tbody > tr > td{
     font-size: 12px;
 }
+
+#banner img{
+    width:300px;
+}
+
+h1{
+    display:inline-block;
+}
+
+.navbar-header img{
+    margin-top:-15px;
+}
+
+.logo{
+    text-align:center;
+}

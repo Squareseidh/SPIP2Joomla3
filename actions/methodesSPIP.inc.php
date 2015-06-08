@@ -38,6 +38,40 @@
         return $document;
     }
 
+    function formatLinktoJoomla($letexte,$elementartmax,$elementrubmax, $bdSPIP,$prefixeSPIP){
+        if (preg_match_all(',\[([^][]*)->(>?)([^]]*)\],msS', $letexte, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $regs) {
+                if (preg_match_all('/(rub|art|doc)([0-9]+)/', $regs[3], $matches, PREG_SET_ORDER)) {
+                    foreach ($matches as $regsregs) {
+                        if($regsregs[1]== "art"){
+                            $idmaxarticle=intval($elementartmax[0]->idmax);
+                            $idarticle=intval($regsregs[2]);
+                            $nouvelidarticle=$idmaxarticle+$idarticle;
+                            
+                            $requeteRubassoc = $bdSPIP->prepare('SELECT id_rubrique
+                                                                FROM '.$prefixeSPIP.'articles
+                                                                WHERE id_article ='.$regsregs[2]);
+                            $okRubassoc = $requeteRubassoc->execute() ;
+                            $rubassoc = $requeteRubassoc->fetchAll(PDO::FETCH_OBJ);
+                            
+                            $rubrique=intval($rubassoc[0]->id_rubrique)+intval($elementrubmax[0]->idmax);
+                        
+                            $baliselien='<a href="index.php?option=com_content&amp;view=article&amp;id='.$nouvelidarticle.'&amp;catid='.$rubrique.'&amp;Itemid=102">'.$regs[1].'</a>'; //MODIFIER ITEM ID
+                        } elseif ($regsregs[1]== "rub"){
+                            $baliselien='<a href='.$regs[3].'>'.$regs[1].'</a>';
+                        } else {
+                            $baliselien='<a href='.$regs[3].'>'.$regs[1].'</a>';
+                        }
+                    }
+                } else {
+                    $baliselien='<a href='.$regs[3].'>'.$regs[1].'</a>';
+                }
+                $letexte = str_replace($regs[0], $baliselien, $letexte);
+            }
+        }
+        return $letexte;
+    }
+
     function formatSPIPtoJoomla($letexte){
         
         
@@ -77,15 +111,6 @@
 	   foreach ($regs as $tab) {
 		  $letexte = str_replace($tab[1], traiter_tableau($tab[1]), $letexte);
 	   }
-
-        
-        if (preg_match_all(',\[([^][]*)->(>?)([^]]*)\],msS', $letexte, $matches, PREG_SET_ORDER)) {
-            foreach ($matches as $regs) {
-                $baliselien='<a href='.$regs[3].'>'.$regs[1].'</a>';
-                $letexte = str_replace($regs[0], $baliselien, $letexte);
-            }
-        }
-        
         
         // autres raccourcis
         $cherche1 = array(
