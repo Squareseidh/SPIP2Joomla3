@@ -7,7 +7,7 @@
             $maBD = new PDO('mysql:host='.$hote.';dbname='.$nom_BD, $utilisateur,$password);
             $requete = $maBD->prepare('SET NAMES UTF8') ;
             $resultat = $requete->execute() ;
-            return $maBD ;   
+            return $maBD ;
         }
         catch(Exception $e)
         {     // Catch : sera exécuté si un problème survient (une exception) lors de la tentative définie dans try
@@ -15,8 +15,6 @@
             $messageErreur = '<p class="erreur">Echec de la connexion à la base de données';
             $messageErreur .= '<br />Erreur : '.$e->getMessage().'<br />';
             $messageErreur .= 'N° : '.$e->getCode().'</p>';
-            var_dump($e->getMessage());
-            var_dump($e->getCode());die;
             //  throw new Exception($messageErreur) ;
             return false;
         }

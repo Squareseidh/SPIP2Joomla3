@@ -5,7 +5,7 @@
                                                        FROM '.$prefixeJoomla.'users');
         $okAfficheIdMaxUser = $requeteAfficheIdMaxUser->execute() ;
         $idMaxUser = $requeteAfficheIdMaxUser->fetchAll(PDO::FETCH_OBJ)  ;
-        return $idMaxUser;   
+        return $idMaxUser;
     }
 
     function afficheIdMaxCategJoomla($bdJoomla,$prefixeJoomla){
@@ -13,7 +13,7 @@
                                                         FROM '.$prefixeJoomla.'categories');
         $okAfficheIdMaxCateg = $requeteAfficheIdMaxCateg->execute() ;
         $idMaxCateg = $requeteAfficheIdMaxCateg->fetchAll(PDO::FETCH_OBJ)  ;
-        return $idMaxCateg;   
+        return $idMaxCateg;
     }
 
     function afficheIdMaxArtJoomla($bdJoomla,$prefixeJoomla){
@@ -21,7 +21,26 @@
                                                         FROM '.$prefixeJoomla.'content');
         $okAfficheIdMaxArt = $requeteAfficheIdMaxArt->execute() ;
         $idMaxArt = $requeteAfficheIdMaxArt->fetchAll(PDO::FETCH_OBJ)  ;
-        return $idMaxArt;   
+        return $idMaxArt;
+    }
+
+    function stringURLSafe($string)
+    {
+        //remove any '-' from the string they will be used as concatonater
+        $str = str_replace('-', ' ', $string);
+ 
+        /*$lang = &JFactory::getLanguage();
+        $str = $lang->transliterate($str);*/
+ 
+        // convert certain symbols to letter representation
+        $str = str_replace(array('&', '"', '<', '>'), array('a', 'q', 'l', 'g'), $str);
+ 
+        // remove any duplicate whitespace, and ensure all characters are alphanumeric
+        $str = preg_replace(array('/\s+/','/[^A-Za-z0-9\-]/'), array('-',''), $str);
+ 
+        // lowercase and trim
+        $str = trim(strtolower($str));
+        return $str;
     }
 
 

@@ -54,7 +54,7 @@
     /* Mise en forme du résultat de la requête d'affichage des auteurs SPIP */
     $listauteurs  = '' ;  // On prépare le texte à injecter dans la page web
     foreach($auteurs as $element)
-    {  
+    {
         $nouvelid=$idMaxUserJoomla[0]->idmax+$element->id_auteur;
         
         $listauteurs .= '<tr>'.'<td>'.$element->id_auteur.'</td><td>'.$nouvelid."</td><td>".$element->nom."</td><td>".$element->email."</td><td>".$element->login."</td><td>".$element->en_ligne.'</td></tr>' ;
@@ -69,15 +69,16 @@
     /* Mise en forme du résultat de la requête d'affichage des rubriques SPIP */
     $listrubriques  = '' ;  // On prépare le texte à injecter dans la page web
     foreach($rubriques as $element)
-    {  
+    {
         $texte=formatSPIPtoJoomla($element->texte);
         $nouvelid=$idMaxCategJoomla[0]->idmax+$element->id_rubrique;
         $texte=formatLinktoJoomla($texte,$idMaxArticleJoomla,$idMaxCategJoomla, $bdSPIP,$prefixeSPIP);
+        $alias=stringURLSafe($element->titre);
         
         if(empty($element->descriptif)){
             $description=$texte;
         } else {
-            $description="<h2>".$element->descriptif."</h2><br>".$texte;    
+            $description="<h2>".$element->descriptif."</h2><br>".$texte;
         }
         
         if($element->id_parent==0){ //Toutes les categories Joomla ont un parent nommé Root d'id 1
@@ -88,7 +89,7 @@
         
         
         
-        $listrubriques .= '<tr>'.'<td>'.$element->id_rubrique.'</td><td>'.$nouvelid.'</td><td>'.$element->id_parent."</td><td>".$nouvelidparent."</td><td>".$element->titre."</td><td>".$description."</td><td>".$element->date."</td><td>".$element->maj.'</td></tr>' ;
+        $listrubriques .= '<tr>'.'<td>'.$element->id_rubrique.'</td><td>'.$nouvelid.'</td><td>'.$element->id_parent."</td><td>".$nouvelidparent."</td><td>".$element->titre."</td><td>".$alias."</td><td>".$description."</td><td>".$element->date."</td><td>".$element->maj.'</td></tr>' ;
     }
 
 
@@ -100,12 +101,13 @@
     /* Mise en forme du résultat de la requête d'affichage des articles SPIP */
     $listarticles  = '' ;  // On prépare le texte à injecter dans la page web
     foreach($articles as $element)
-    {  
+    {
         
         $texte=formatSPIPtoJoomla($element->texte);
         $texte=formatLinktoJoomla($texte,$idMaxArticleJoomla,$idMaxCategJoomla,$bdSPIP,$prefixeSPIP);
         $nouvelid=$idMaxArticleJoomla[0]->idmax+$element->id_article;
         $nouvelidRub=$idMaxCategJoomla[0]->idmax+$element->id_rubrique;
+        $alias=stringURLSafe($element->titre);
         
         /* recuperation et injection au bon endroit des documents associés à un article */
         if (preg_match_all('/<(doc|img)([0-9]+)\|[a-zA-Z0-9_-]*>/', $texte, $matches, PREG_SET_ORDER)) {
@@ -124,11 +126,11 @@
                             if($extension=="pdf"){
                                 $lien='{pdf='.$path.'|600|400}<br>'; //A CHANGER SI VOUS NE VOULEZ PAS UTILISER L EXTENSION PDF EMBED DE JOOMLA
                             } else {
-                                $lien='<a href='.$path.'>'.$matchesTitres[0][1].'</a><br>'; 
+                                $lien='<a href='.$path.'>'.$matchesTitres[0][1].'</a><br>';
                             }
                         } else {
-                          $lien='<a href='.$path.'>Document</a><br>';  
-                        } 
+                          $lien='<a href='.$path.'>Document</a><br>';
+                        }
                     } else {
                         $lien='<img src='.$path.'></img><br>';
                     }
@@ -140,7 +142,7 @@
         
         
         
-        $listarticles .= '<tr>'.'<td>'.$element->id_article.'</td><td>'.$nouvelid.'</td><td>'.$element->titre."</td><td>".$element->id_rubrique."</td><td>".$nouvelidRub."</td><td>".$texte."</td><td>".$element->date."</td><td>".$element->visites."</td><td>".$element->date_modif.'</td></tr>' ;
+        $listarticles .= '<tr>'.'<td>'.$element->id_article.'</td><td>'.$nouvelid.'</td><td>'.$element->titre."</td><td>".$alias."</td><td>".$element->id_rubrique."</td><td>".$nouvelidRub."</td><td>".$texte."</td><td>".$element->date."</td><td>".$element->visites."</td><td>".$element->date_modif.'</td></tr>' ;
     }
 
     
@@ -153,17 +155,17 @@
 <html>
     <?php 
         $titre= 'Import DB SPIP to DB Joomla!' ;
-        include 'elements/head.inc.php' ; 
+        include 'elements/head.inc.php' ;
     ?>
   <body>
     <?php include 'elements/menu.inc.php' ; ?>
     <div class="container">
-        <?php include 'elements/titrePage.inc.php' ; ?> 
+        <?php include 'elements/titrePage.inc.php' ; ?>
         <div class="row">
             <div class = "col-lg-12">
                 <?php
                     echo $messageSPIP;
-                    echo $messageJoomla;     
+                    echo $messageJoomla;
                 ?>
             </div>
             <ul class="nav nav-tabs">
@@ -187,7 +189,7 @@
                             </tr>
                         <?php // On injecte dans la page web le texte créé par le programme situé en début de fichier 
                             echo $listauteurs;
-                        ?> 
+                        ?>
                         </tbody>
                    </table>
                 </div>
@@ -202,13 +204,14 @@
                                 <th>id_parent</th>
                                 <th>new id parent</th>
                                 <th>titre</th>
+                                <th>alias</th>
                                 <th>descriptif</th>
                                 <th>date</th>
                                 <th>maj</th>
                             </tr>
                         <?php // On injecte dans la page web le texte créé par le programme situé en début de fichier 
                             echo $listrubriques;
-                        ?> 
+                        ?>
                         </tbody>
                    </table>
                 </div>
@@ -221,6 +224,7 @@
                                 <th>id_article</th>
                                 <th>new id</th>
                                 <th>titre</th>
+                                <th>alias</th>
                                 <th>id_rubrique</th>
                                 <th>new id_rub</th>
                                 <th>texte</th>
@@ -230,12 +234,12 @@
                             </tr>
                         <?php // On injecte dans la page web le texte créé par le programme situé en début de fichier 
                             echo $listarticles;
-                        ?> 
+                        ?>
                         </tbody>
                    </table>
                 </div>
             </div>
-        </div>     
+        </div>
         <?php include 'elements/footer.inc.php' ; ?>
     </div> <!-- Fin du container -->
   </body>

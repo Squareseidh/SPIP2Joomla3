@@ -9,4 +9,5 @@
     </title>
     <script src="js/jquery.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
+    <link rel="icon" type="image/png" href="favicon.png" />
 </head>

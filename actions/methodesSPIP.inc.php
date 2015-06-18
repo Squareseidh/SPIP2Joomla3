@@ -9,7 +9,7 @@
                                                 WHERE statut != "5poubelle"');
         $okAfficheAut = $requeteAfficheAut->execute();
         $auteurs = $requeteAfficheAut->fetchAll(PDO::FETCH_OBJ);
-        return $auteurs;   
+        return $auteurs;
     }
 
     function afficheRubriquesSPIP($bdSPIP,$prefixeSPIP){
@@ -17,7 +17,7 @@
                                                FROM '.$prefixeSPIP.'rubriques');
         $okAfficheRub = $requeteAfficheRub->execute() ;
         $rubriques = $requeteAfficheRub->fetchAll(PDO::FETCH_OBJ);
-        return $rubriques;         
+        return $rubriques;
     }
 
     function afficheArticlesSPIP($bdSPIP,$prefixeSPIP){
@@ -26,7 +26,7 @@
                                                WHERE statut != "refuse"');
         $okAfficheArt = $requeteAfficheArt->execute() ;
         $articles = $requeteAfficheArt->fetchAll(PDO::FETCH_OBJ);
-        return $articles;         
+        return $articles;
     }
 
     function afficheDocumentById($bdSPIP,$prefixeSPIP,$id_document){
@@ -93,7 +93,25 @@
         // en forme (paragraphes, raccourcis...)
         //
 
-        $letexte = "\n".trim($letexte);      
+        $letexte = "\n".trim($letexte);
+        
+        // les listes
+        if (preg_match("/-[*#]/", $letexte)==1){
+            //$letexte = traiter_listes($letexte);
+        }
+        
+        //
+        // Raccourcis ancre [#ancre<-]
+        //
+        /*if (preg_match_all(',\[([^][]*)<-\],msS', $letexte, $matches, PREG_SET_ORDER)){
+            foreach ($matches as $regs){
+                var_dump($regs);
+                
+                $letexte = str_replace($regs[0],
+                '<a name="'.entites_html($regs[1]).'"></a>', $letexte);
+            }
+        }*/
+	
         
         
         //
