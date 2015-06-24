@@ -87,9 +87,39 @@
             $nouvelidparent=$idMaxCategJoomla[0]->idmax+$element->id_parent;
         }
         
+        /* CREATION DE LA VARIABLE PATH POUR JOOMLA */
+        $arbo = array();
+        $idparent = intval($element->id_parent);
+        $path = null;
+        $alias2 = null;
+        $part2 = null;
         
         
-        $listrubriques .= '<tr>'.'<td>'.$element->id_rubrique.'</td><td>'.$nouvelid.'</td><td>'.$element->id_parent."</td><td>".$nouvelidparent."</td><td>".$element->titre."</td><td>".$alias."</td><td>".$description."</td><td>".$element->date."</td><td>".$element->maj.'</td></tr>' ;
+        array_push($arbo,$idparent);
+        
+        while($idparent>0){
+            $idparent = afficheIdParent($bdSPIP,$prefixeSPIP,$idparent);
+            array_push($arbo,$idparent);
+        }
+        
+        if($arbo[0]==0){
+            $path=$alias;
+        } else {
+            for($i=count($arbo)-1; $i>=0; $i--){
+                $part = createPath($bdSPIP,$prefixeSPIP,$arbo[$i]);
+                if($part==false){
+                    $alias2.=$alias.'/';
+                } else {
+                    $part = stringURLSafe($part->titre);
+                    $part2 .= $part.'/';
+                }
+            }
+            $path=$part2.$alias2;
+        }
+             
+        
+        
+        $listrubriques .= '<tr>'.'<td>'.$element->id_rubrique.'</td><td>'.$nouvelid.'</td><td>'.$element->id_parent."</td><td>".$nouvelidparent."</td><td>".$element->titre."</td><td>".$alias."</td><td>".$path."</td><td>".$description."</td><td>".$element->date."</td><td>".$element->maj.'</td></tr>' ;
     }
 
 
@@ -124,15 +154,15 @@
                         $titre=preg_match_all('/[a-z]+\/([a-zA-Z0-9_-]*)/', $path, $matchesTitres, PREG_SET_ORDER);
                         if(!empty($matchesTitres[0])){
                             if($extension=="pdf"){
-                                $lien='{pdf='.$path.'|600|400}<br>'; //A CHANGER SI VOUS NE VOULEZ PAS UTILISER L EXTENSION PDF EMBED DE JOOMLA
+                                $lien='{pdf=images/'.$path.'|600|400}<br>'; //A CHANGER SI VOUS NE VOULEZ PAS UTILISER L EXTENSION PDF EMBED DE JOOMLA
                             } else {
-                                $lien='<a href='.$path.'>'.$matchesTitres[0][1].'</a><br>';
+                                $lien='<a href=images/'.$path.'>'.$matchesTitres[0][1].'</a><br>';
                             }
                         } else {
-                          $lien='<a href='.$path.'>Document</a><br>';
+                          $lien='<a href=images/'.$path.'>Document</a><br>';
                         }
                     } else {
-                        $lien='<img src='.$path.'></img><br>';
+                        $lien='<img src=images/'.$path.'></img><br>';
                     }
                 
                     $texte = preg_replace('/<(doc|img)('.$regs[2].')\|[a-zA-Z0-9_-]*>/', $lien, $texte);
@@ -205,6 +235,7 @@
                                 <th>new id parent</th>
                                 <th>titre</th>
                                 <th>alias</th>
+                                <th>path</th>
                                 <th>descriptif</th>
                                 <th>date</th>
                                 <th>maj</th>

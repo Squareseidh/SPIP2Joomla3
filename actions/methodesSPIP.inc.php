@@ -169,4 +169,22 @@
         return $letexte;
     }
 
+    function createPath($bdSPIP,$prefixeSPIP,$id_parent){
+        $requeteAfficheTitreParent = $bdSPIP->prepare('SELECT titre
+                                                        FROM '.$prefixeSPIP.'rubriques
+                                                        WHERE id_rubrique = '.$id_parent);
+        $okAfficheTitreParent = $requeteAfficheTitreParent->execute();
+        $titreparent = $requeteAfficheTitreParent->fetch(PDO::FETCH_OBJ);
+        return $titreparent;
+    }
+
+    function afficheIdParent($bdSPIP,$prefixeSPIP,$idparent){
+        $requeteAfficheIdParent = $bdSPIP->prepare('SELECT id_parent
+                                                    FROM '.$prefixeSPIP.'rubriques
+                                                    WHERE id_rubrique = '.$idparent);
+        $okAfficheIdParent = $requeteAfficheIdParent->execute();
+        $grdparent = $requeteAfficheIdParent->fetch(PDO::FETCH_OBJ);
+        return intval($grdparent->id_parent);
+    }
+
 ?>

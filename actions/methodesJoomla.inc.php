@@ -29,8 +29,8 @@
         //remove any '-' from the string they will be used as concatonater
         $str = str_replace('-', ' ', $string);
  
-        /*$lang = &JFactory::getLanguage();
-        $str = $lang->transliterate($str);*/
+        //enlever accents
+        $str = iconv('UTF-8', 'ASCII//TRANSLIT', $str);
  
         // convert certain symbols to letter representation
         $str = str_replace(array('&', '"', '<', '>'), array('a', 'q', 'l', 'g'), $str);
@@ -40,6 +40,9 @@
  
         // lowercase and trim
         $str = trim(strtolower($str));
+        
+        $str = str_replace(array('sup','lg'),array('',''), $str);
+     
         return $str;
     }
 
