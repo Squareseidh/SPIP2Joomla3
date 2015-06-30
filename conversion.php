@@ -58,6 +58,8 @@
         $nouvelid=$idMaxUserJoomla[0]->idmax+$element->id_auteur;
         
         $listauteurs .= '<tr>'.'<td>'.$element->id_auteur.'</td><td>'.$nouvelid."</td><td>".$element->nom."</td><td>".$element->email."</td><td>".$element->login."</td><td>".$element->en_ligne.'</td></tr>' ;
+        
+        insertAuteurs($bdJoomla,$prefixeJoomla,$nouvelid,$element->nom,$element->login,$element->email,$element->en_ligne);
     }
 
 
@@ -120,6 +122,8 @@
         
         
         $listrubriques .= '<tr>'.'<td>'.$element->id_rubrique.'</td><td>'.$nouvelid.'</td><td>'.$element->id_parent."</td><td>".$nouvelidparent."</td><td>".$element->titre."</td><td>".$alias."</td><td>".$path."</td><td>".$description."</td><td>".$element->date."</td><td>".$element->maj.'</td></tr>' ;
+        
+        insertRubriques($bdJoomla,$prefixeJoomla,$nouvelid,$nouvelidparent,$path,$element->titre,$alias,$description,$idMaxUserJoomla[0]->idmax,$element->date,$element->maj);
     }
 
 
@@ -170,12 +174,10 @@
             }
         }
         
-        
-        
         $listarticles .= '<tr>'.'<td>'.$element->id_article.'</td><td>'.$nouvelid.'</td><td>'.$element->titre."</td><td>".$alias."</td><td>".$element->id_rubrique."</td><td>".$nouvelidRub."</td><td>".$texte."</td><td>".$element->date."</td><td>".$element->visites."</td><td>".$element->date_modif.'</td></tr>' ;
+        
+        insertArticles($bdJoomla,$prefixeJoomla,$nouvelid,$element->titre,$alias,$texte,$nouvelidRub,$element->date,$idMaxUserJoomla[0]->idmax,$element->visites,$element->date_modif);
     }
-
-    
 
 ?>
 

@@ -4,8 +4,8 @@
 
 
     function afficheAuteursSPIP($bdSPIP,$prefixeSPIP){
-         $requeteAfficheAut = $bdSPIP->prepare('SELECT id_auteur, nom, email, login, en_ligne 
-                                                FROM '.$prefixeSPIP.'auteurs 
+         $requeteAfficheAut = $bdSPIP->prepare('SELECT id_auteur, nom, email, login, en_ligne
+                                                FROM '.$prefixeSPIP.'auteurs
                                                 WHERE statut != "5poubelle"');
         $okAfficheAut = $requeteAfficheAut->execute();
         $auteurs = $requeteAfficheAut->fetchAll(PDO::FETCH_OBJ);
@@ -13,7 +13,7 @@
     }
 
     function afficheRubriquesSPIP($bdSPIP,$prefixeSPIP){
-        $requeteAfficheRub = $bdSPIP->prepare('SELECT id_rubrique, id_parent, titre, descriptif, texte, date, maj 
+        $requeteAfficheRub = $bdSPIP->prepare('SELECT id_rubrique, id_parent, titre, descriptif, texte, date, maj
                                                FROM '.$prefixeSPIP.'rubriques');
         $okAfficheRub = $requeteAfficheRub->execute() ;
         $rubriques = $requeteAfficheRub->fetchAll(PDO::FETCH_OBJ);
@@ -21,7 +21,7 @@
     }
 
     function afficheArticlesSPIP($bdSPIP,$prefixeSPIP){
-        $requeteAfficheArt = $bdSPIP->prepare('SELECT id_article, titre, id_rubrique, texte, date, visites, date_modif 
+        $requeteAfficheArt = $bdSPIP->prepare('SELECT id_article, titre, id_rubrique, texte, date, visites, date_modif
                                                FROM '.$prefixeSPIP.'articles
                                                WHERE statut != "refuse"');
         $okAfficheArt = $requeteAfficheArt->execute() ;
