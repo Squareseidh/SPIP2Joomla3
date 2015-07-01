@@ -38,7 +38,7 @@
         return $document;
     }
 
-    function formatLinktoJoomla($letexte,$elementartmax,$elementrubmax, $bdSPIP,$prefixeSPIP){
+    function formatLinktoJoomla($letexte,$elementartmax,$elementrubmax, $bdSPIP,$prefixeSPIP,$dossierJoomla){
         if (preg_match_all(',\[([^][]*)->(>?)([^]]*)\],msS', $letexte, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $regs) {
                 if (preg_match_all('/(rub|art|doc)([0-9]+)/', $regs[3], $matches, PREG_SET_ORDER)) {
@@ -56,15 +56,31 @@
                             
                             $rubrique=intval($rubassoc[0]->id_rubrique)+intval($elementrubmax[0]->idmax);
                         
-                            $baliselien='<a href="index.php?option=com_content&amp;view=article&amp;id='.$nouvelidarticle.'&amp;catid='.$rubrique.'&amp;Itemid=102">'.$regs[1].'</a>'; //MODIFIER ITEM ID
+                            $baliselien='<a href="index.php?option=com_content&amp;view=article&amp;id='.$nouvelidarticle.'&amp;catid='.$rubrique.'&amp;Itemid=102">'.$regs[1].'A MODIFIER</a>'; //MODIFIER ITEM ID
+                            var_dump($regs);
                         } elseif ($regsregs[1]== "rub"){
-                            $baliselien='<a href='.$regs[3].'>'.$regs[1].'</a>';
+                            $baliselien='<a href='.$regs[3].'>'.$regs[1].'A MODIFIER</a>';
+                            var_dump($regs);
                         } else {
-                            $baliselien='<a href='.$regs[3].'>'.$regs[1].'</a>';
+                            /* SI C EST UN DOCUMENT*/
+                            $baliselien='<a href=../'.$regs[3].'>'.$regs[1].'</a>';
+                            $requeteAfficheDocumentById = $bdSPIP->prepare('SELECT d.fichier
+                                                        FROM '.$prefixeSPIP.'documents d
+                                                        WHERE d.id_document = '.$regsregs[2]);
+                            $okAfficheDocumentById = $requeteAfficheDocumentById->execute();
+                            $path = $requeteAfficheDocumentById->fetchAll(PDO::FETCH_OBJ);
+                            var_dump($path[0]->fichier);
+                            $baliselien='<a href=/'.$dossierJoomla.'/images/'.$path[0]->fichier.'>'.$regs[1].'</a><br>';
                         }
                     }
                 } else {
-                    $baliselien='<a href='.$regs[3].'>'.$regs[1].'</a>';
+                    if (preg_match_all('/^(#|http).*/', $regs[3], $matchesAnchor, PREG_SET_ORDER)) {
+                        foreach ($matchesAnchor as $regsAnchor) {
+                            $baliselien='<a href='.$regsAnchor[0].'>'.$regs[1].'</a>';
+                        }
+                    } else {
+                            $baliselien='<a href=../'.$regs[3].'>'.$regs[1].'</a>';
+                    }
                 }
                 $letexte = str_replace($regs[0], $baliselien, $letexte);
             }
@@ -103,12 +119,12 @@
         //
         // Raccourcis ancre [#ancre<-]
         //
-        /*if (preg_match_all(',\[([^][]*)<-\],msS', $letexte, $matches, PREG_SET_ORDER)){
+        /*if (preg_match_all(',\[([^][]*)< -\],msS', $letexte, $matches, PREG_SET_ORDER)){
             foreach ($matches as $regs){
                 var_dump($regs);
                 
                 $letexte = str_replace($regs[0],
-                '<a name="'.entites_html($regs[1]).'"></a>', $letexte);
+                '<a id="'.entites_html($regs[1]).'"></a>', $letexte);
             }
         }*/
 	
@@ -145,7 +161,9 @@
 		/* 12 */	"/<p>\n*(?:<br\s*\/?".">\n*)*/S",
 		/* 13 */	"/<quote>/S",
 		/* 14 */	"/<\/quote>/S",
-		/* 15 */	"/<\/?intro>/S"
+		/* 15 */	"/<\/?intro>/S",
+                    "/-[\*]+/",
+                    "/-[\#]+/"
         );
         $remplace1 = array(
 		/* 1 */ 	"\n<br />&mdash;&nbsp;",
@@ -161,7 +179,10 @@
 		/* 12 */	"<p>",
 		/* 13 */	"<blockquote class=\"spip\"><p>",
 		/* 14 */	"</blockquote><p>",
-		/* 15 */	""
+		/* 15 */	"",
+                    "- ",
+                    "- "
+            
         );
         
         $letexte = preg_replace($cherche1, $remplace1, $letexte);

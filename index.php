@@ -75,6 +75,12 @@
                                 <input type="text" class="form-control" name="prefixeJoomla" placeholder="Rentrez le préfixe des tables (joom_)">
                             </div>
                         </div>
+                        <div class="form-group">
+                            <label for="nom" class="col-sm-4 control-label">Nom dossier installation Joomla</label>
+                            <div class="col-sm-8">
+                                <input type="text" class="form-control" name="dossierJoomla" placeholder="Rentrez le dossier ou se situe Joomla">
+                            </div>
+                        </div>
                     </div>
 
 
