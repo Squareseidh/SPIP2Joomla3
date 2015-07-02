@@ -60,7 +60,7 @@
         
         $listauteurs .= '<tr>'.'<td>'.$element->id_auteur.'</td><td>'.$nouvelid."</td><td>".$element->nom."</td><td>".$element->email."</td><td>".$element->login."</td><td>".$element->en_ligne.'</td></tr>' ;
         
-        //insertAuteurs($bdJoomla,$prefixeJoomla,$nouvelid,$element->nom,$element->login,$element->email,$element->en_ligne);
+        insertAuteurs($bdJoomla,$prefixeJoomla,$nouvelid,$element->nom,$element->login,$element->email,$element->en_ligne);
     }
 
 
@@ -124,7 +124,7 @@
         
         $listrubriques .= '<tr>'.'<td>'.$element->id_rubrique.'</td><td>'.$nouvelid.'</td><td>'.$element->id_parent."</td><td>".$nouvelidparent."</td><td>".$element->titre."</td><td>".$alias."</td><td>".$path."</td><td>".$description."</td><td>".$element->date."</td><td>".$element->maj.'</td></tr>' ;
         
-        //insertRubriques($bdJoomla,$prefixeJoomla,$nouvelid,$nouvelidparent,$path,$element->titre,$alias,$description,$idMaxUserJoomla[0]->idmax,$element->date,$element->maj);
+        insertRubriques($bdJoomla,$prefixeJoomla,$nouvelid,$nouvelidparent,$path,$element->titre,$alias,$description,$idMaxUserJoomla[0]->idmax,$element->date,$element->maj);
     }
 
 
@@ -161,10 +161,10 @@
                             if($extension=="pdf"){
                                 $lien='<br>{pdf=images/'.$path.'|600|400}<br><br>'; //A CHANGER SI VOUS NE VOULEZ PAS UTILISER L EXTENSION PDF EMBED DE JOOMLA
                             } else {
-                                $lien='<a href=/'.$dossierJoomla.'/images/'.$path.'>'.$matchesTitres[0][1].'</a><br>';
+                                $lien='<a target="_blank" class="'.$documentlié[0]->extension.'" href=/'.$dossierJoomla.'/images/'.$path.'>'.$matchesTitres[0][1].'</a><br>';
                             }
                         } else {
-                          $lien='<a href=/'.$dossierJoomla.'/images/'.$path.'>Document</a><br>';
+                          $lien='<a target="_blank" class="'.$documentlié[0]->extension.'" href=/'.$dossierJoomla.'/images/'.$path.'>Document</a><br>';
                         }
                     } else {
                         $lien='<img src=/'.$dossierJoomla.'/images/'.$path.'></img><br>';
@@ -177,7 +177,7 @@
         
         $listarticles .= '<tr>'.'<td>'.$element->id_article.'</td><td>'.$nouvelid.'</td><td>'.$element->titre."</td><td>".$alias."</td><td>".$element->id_rubrique."</td><td>".$nouvelidRub."</td><td>".$texte."</td><td>".$element->date."</td><td>".$element->visites."</td><td>".$element->date_modif.'</td></tr>' ;
         
-        //insertArticles($bdJoomla,$prefixeJoomla,$nouvelid,$element->titre,$alias,$texte,$nouvelidRub,$element->date,$idMaxUserJoomla[0]->idmax,$element->visites,$element->date_modif);
+        insertArticles($bdJoomla,$prefixeJoomla,$nouvelid,$element->titre,$alias,$texte,$nouvelidRub,$element->date,$idMaxUserJoomla[0]->idmax,$element->visites,$element->date_modif);
     }
 
 ?>

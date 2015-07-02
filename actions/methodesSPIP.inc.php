@@ -57,29 +57,30 @@
                             $rubrique=intval($rubassoc[0]->id_rubrique)+intval($elementrubmax[0]->idmax);
                         
                             $baliselien='<a href="index.php?option=com_content&amp;view=article&amp;id='.$nouvelidarticle.'&amp;catid='.$rubrique.'&amp;Itemid=102">'.$regs[1].'A MODIFIER</a>'; //MODIFIER ITEM ID
-                            var_dump($regs);
                         } elseif ($regsregs[1]== "rub"){
                             $baliselien='<a href='.$regs[3].'>'.$regs[1].'A MODIFIER</a>';
-                            var_dump($regs);
                         } else {
                             /* SI C EST UN DOCUMENT*/
-                            $baliselien='<a href=../'.$regs[3].'>'.$regs[1].'</a>';
                             $requeteAfficheDocumentById = $bdSPIP->prepare('SELECT d.fichier
                                                         FROM '.$prefixeSPIP.'documents d
                                                         WHERE d.id_document = '.$regsregs[2]);
                             $okAfficheDocumentById = $requeteAfficheDocumentById->execute();
                             $path = $requeteAfficheDocumentById->fetchAll(PDO::FETCH_OBJ);
-                            var_dump($path[0]->fichier);
-                            $baliselien='<a href=/'.$dossierJoomla.'/images/'.$path[0]->fichier.'>'.$regs[1].'</a><br>';
+                            $baliselien='<a target="_blank" href=/'.$dossierJoomla.'/images/'.$path[0]->fichier.'>'.$regs[1].'</a><br>';
                         }
                     }
                 } else {
-                    if (preg_match_all('/^(#|http).*/', $regs[3], $matchesAnchor, PREG_SET_ORDER)) {
+                    if (preg_match_all('/^(#|mailto).*/', $regs[3], $matchesAnchor, PREG_SET_ORDER)) {
                         foreach ($matchesAnchor as $regsAnchor) {
                             $baliselien='<a href='.$regsAnchor[0].'>'.$regs[1].'</a>';
                         }
+                            
+                    } else if (preg_match_all('/^(http).*/', $regs[3], $matchesAnchor, PREG_SET_ORDER))  {
+                        foreach ($matchesAnchor as $regsAnchor) {
+                            $baliselien='<a target="_blank" href='.$regsAnchor[0].'>'.$regs[1].'</a>';
+                        }
                     } else {
-                            $baliselien='<a href=../'.$regs[3].'>'.$regs[1].'</a>';
+                        $baliselien='<a target="_blank" href=../'.$regs[3].'>'.$regs[1].'</a>';
                     }
                 }
                 $letexte = str_replace($regs[0], $baliselien, $letexte);
@@ -111,23 +112,17 @@
 
         $letexte = "\n".trim($letexte);
         
-        // les listes
-        if (preg_match("/-[*#]/", $letexte)==1){
-            //$letexte = traiter_listes($letexte);
-        }
         
         //
-        // Raccourcis ancre [#ancre<-]
+        // Raccourcis ancre [ancre<-]
         //
-        /*if (preg_match_all(',\[([^][]*)< -\],msS', $letexte, $matches, PREG_SET_ORDER)){
+        $regexp = "|\[?([^][]*)<\n-\]|S";
+        if (preg_match_all($regexp, $letexte, $matches, PREG_SET_ORDER)){
             foreach ($matches as $regs){
-                var_dump($regs);
-                
-                $letexte = str_replace($regs[0],
-                '<a id="'.entites_html($regs[1]).'"></a>', $letexte);
+                $letexte = str_replace($regs[0],'<a id="'.$regs[1].'"></a>', $letexte);
             }
-        }*/
-	
+        }
+            
         
         
         //
@@ -163,7 +158,8 @@
 		/* 14 */	"/<\/quote>/S",
 		/* 15 */	"/<\/?intro>/S",
                     "/-[\*]+/",
-                    "/-[\#]+/"
+                    "/-[\#]+/",
+                    "/\~\~/"
         );
         $remplace1 = array(
 		/* 1 */ 	"\n<br />&mdash;&nbsp;",
@@ -181,7 +177,8 @@
 		/* 14 */	"</blockquote><p>",
 		/* 15 */	"",
                     "- ",
-                    "- "
+                    "- ",
+                    " "
             
         );
         
