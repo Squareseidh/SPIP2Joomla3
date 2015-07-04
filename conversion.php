@@ -60,7 +60,7 @@
         
         $listauteurs .= '<tr>'.'<td>'.$element->id_auteur.'</td><td>'.$nouvelid."</td><td>".$element->nom."</td><td>".$element->email."</td><td>".$element->login."</td><td>".$element->en_ligne.'</td></tr>' ;
         
-        insertAuteurs($bdJoomla,$prefixeJoomla,$nouvelid,$element->nom,$element->login,$element->email,$element->en_ligne);
+        //insertAuteurs($bdJoomla,$prefixeJoomla,$nouvelid,$element->nom,$element->login,$element->email,$element->en_ligne);
     }
 
 
@@ -124,7 +124,7 @@
         
         $listrubriques .= '<tr>'.'<td>'.$element->id_rubrique.'</td><td>'.$nouvelid.'</td><td>'.$element->id_parent."</td><td>".$nouvelidparent."</td><td>".$element->titre."</td><td>".$alias."</td><td>".$path."</td><td>".$description."</td><td>".$element->date."</td><td>".$element->maj.'</td></tr>' ;
         
-        insertRubriques($bdJoomla,$prefixeJoomla,$nouvelid,$nouvelidparent,$path,$element->titre,$alias,$description,$idMaxUserJoomla[0]->idmax,$element->date,$element->maj);
+        //insertRubriques($bdJoomla,$prefixeJoomla,$nouvelid,$nouvelidparent,$path,$element->titre,$alias,$description,$idMaxUserJoomla[0]->idmax,$element->date,$element->maj);
     }
 
 
@@ -177,9 +177,29 @@
         
         $listarticles .= '<tr>'.'<td>'.$element->id_article.'</td><td>'.$nouvelid.'</td><td>'.$element->titre."</td><td>".$alias."</td><td>".$element->id_rubrique."</td><td>".$nouvelidRub."</td><td>".$texte."</td><td>".$element->date."</td><td>".$element->visites."</td><td>".$element->date_modif.'</td></tr>' ;
         
-        insertArticles($bdJoomla,$prefixeJoomla,$nouvelid,$element->titre,$alias,$texte,$nouvelidRub,$element->date,$idMaxUserJoomla[0]->idmax,$element->visites,$element->date_modif);
+        //insertArticles($bdJoomla,$prefixeJoomla,$nouvelid,$element->titre,$alias,$texte,$nouvelidRub,$element->date,$idMaxUserJoomla[0]->idmax,$element->visites,$element->date_modif);
     }
 
+    /* Documents non utilises */
+
+    $documentsNonLies=afficheDocumentsNonLies($bdSPIP,$prefixeSPIP);
+
+ /* Mise en forme du résultat de la requête d'affichage des documents non utilisés SPIP */
+    $listDocumentsNonLies  = '' ;  // On prépare le texte à injecter dans la page web
+    $taillegagne = 0;
+    foreach($documentsNonLies as $element)
+    {
+        $taillegagne += $element->taille;
+        $path='../'.$dossierJoomla.'/images/'.$element->fichier;
+        if(file_exists($path)==true){
+            unlink($path);
+        }
+        
+        $listDocumentsNonLies .= '<tr>'.'<td>'.$element->id_document.'</td><td>'.$element->fichier.'</td></tr>' ;  
+    }
+
+    $taillegagne=intval($taillegagne/1024/1024);
+    
 ?>
 
 
@@ -187,7 +207,7 @@
 <!doctype html>
 <html>
     <?php 
-        $titre= 'Import DB SPIP to DB Joomla!' ;
+        $titre= 'Import SPIP to Joomla!' ;
         include 'elements/head.inc.php' ;
     ?>
   <body>
@@ -205,6 +225,7 @@
                 <li class="active"><a data-toggle="tab" href="#auteurs">Auteurs</a></li>
                 <li><a data-toggle="tab" href="#rubriques">Rubriques</a></li>
                 <li><a data-toggle="tab" href="#articles">Articles</a></li>
+                <li><a data-toggle="tab" href="#documentsNonLies">Documents non liés</a></li>
             </ul>
             <div class="col-lg-12 tab-content">
                 <div id="auteurs" class="tab-pane fade in active">
@@ -268,6 +289,21 @@
                             </tr>
                         <?php // On injecte dans la page web le texte créé par le programme situé en début de fichier 
                             echo $listarticles;
+                        ?>
+                        </tbody>
+                   </table>
+                </div>
+                <div id="documentsNonLies" class="tab-pane fade">
+                    <h2>Documents non liés</h2>
+                    <p>Taille théorique gagné : <?php echo $taillegagne ?> Mo</p>
+                    <table class="table table-bordered table-striped">
+                        <tbody>
+                            <tr>
+                                <th>id_document</th>
+                                <th>chemin</th>
+                            </tr>
+                        <?php // On injecte dans la page web le texte créé par le programme situé en début de fichier 
+                            echo $listDocumentsNonLies;
                         ?>
                         </tbody>
                    </table>

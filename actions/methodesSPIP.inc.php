@@ -205,4 +205,16 @@
         return intval($grdparent->id_parent);
     }
 
+    function afficheDocumentsNonLies($bdSPIP,$prefixeSPIP){
+        $requeteAfficheDocumentsNonLies = $bdSPIP->prepare('SELECT d.fichier, d.id_document, d.taille
+                                                            FROM '.$prefixeSPIP.'documents d
+                                                            WHERE d.id_document NOT IN(
+                                                                SELECT dl.id_document
+                                                                FROM '.$prefixeSPIP.'documents_liens dl
+                                                            ) ORDER BY d.fichier');
+        $okAfficheDocumentsNonLies = $requeteAfficheDocumentsNonLies->execute();
+        $documentsnonlies = $requeteAfficheDocumentsNonLies->fetchAll(PDO::FETCH_OBJ);
+        return $documentsnonlies;
+    }
+
 ?>
