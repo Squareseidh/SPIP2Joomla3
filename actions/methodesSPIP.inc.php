@@ -14,7 +14,8 @@
 
     function afficheRubriquesSPIP($bdSPIP,$prefixeSPIP){
         $requeteAfficheRub = $bdSPIP->prepare('SELECT id_rubrique, id_parent, titre, descriptif, texte, date, maj
-                                               FROM '.$prefixeSPIP.'rubriques');
+                                               FROM '.$prefixeSPIP.'rubriques
+                                               WHERE statut="publie"');
         $okAfficheRub = $requeteAfficheRub->execute() ;
         $rubriques = $requeteAfficheRub->fetchAll(PDO::FETCH_OBJ);
         return $rubriques;
@@ -23,7 +24,7 @@
     function afficheArticlesSPIP($bdSPIP,$prefixeSPIP){
         $requeteAfficheArt = $bdSPIP->prepare('SELECT id_article, titre, id_rubrique, texte, date, visites, date_modif
                                                FROM '.$prefixeSPIP.'articles
-                                               WHERE statut != "refuse"');
+                                               WHERE statut = "publie"');
         $okAfficheArt = $requeteAfficheArt->execute() ;
         $articles = $requeteAfficheArt->fetchAll(PDO::FETCH_OBJ);
         return $articles;
@@ -56,7 +57,7 @@
                             
                             $rubrique=intval($rubassoc[0]->id_rubrique)+intval($elementrubmax[0]->idmax);
                         
-                            $baliselien='<a href="index.php?option=com_content&amp;view=article&amp;id='.$nouvelidarticle.'&amp;catid='.$rubrique.'&amp;Itemid=102">'.$regs[1].'A MODIFIER</a>'; //MODIFIER ITEM ID
+                            $baliselien='<a href="index.php?option=com_content&amp;view=article&amp;id='.$nouvelidarticle.'&amp;catid='.$rubrique.'&amp;Itemid=102">'.$regs[1].' A MODIFIER</a>'; //MODIFIER ITEM ID
                         } elseif ($regsregs[1]== "rub"){
                             $baliselien='<a href='.$regs[3].'>'.$regs[1].'A MODIFIER</a>';
                         } else {
@@ -80,7 +81,7 @@
                             $baliselien='<a target="_blank" href='.$regsAnchor[0].'>'.$regs[1].'</a>';
                         }
                     } else {
-                        $baliselien='<a target="_blank" href=../'.$regs[3].'>'.$regs[1].'</a>';
+                        $baliselien='<a target="_blank" href=../'.$regs[3].'>'.$regs[1].' A MODIFIER</a>';
                     }
                 }
                 $letexte = str_replace($regs[0], $baliselien, $letexte);

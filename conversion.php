@@ -60,7 +60,7 @@
         
         $listauteurs .= '<tr>'.'<td>'.$element->id_auteur.'</td><td>'.$nouvelid."</td><td>".$element->nom."</td><td>".$element->email."</td><td>".$element->login."</td><td>".$element->en_ligne.'</td></tr>' ;
         
-        //insertAuteurs($bdJoomla,$prefixeJoomla,$nouvelid,$element->nom,$element->login,$element->email,$element->en_ligne);
+        insertAuteurs($bdJoomla,$prefixeJoomla,$nouvelid,$element->nom,$element->login,$element->email,$element->en_ligne);
     }
 
 
@@ -124,7 +124,7 @@
         
         $listrubriques .= '<tr>'.'<td>'.$element->id_rubrique.'</td><td>'.$nouvelid.'</td><td>'.$element->id_parent."</td><td>".$nouvelidparent."</td><td>".$element->titre."</td><td>".$alias."</td><td>".$path."</td><td>".$description."</td><td>".$element->date."</td><td>".$element->maj.'</td></tr>' ;
         
-        //insertRubriques($bdJoomla,$prefixeJoomla,$nouvelid,$nouvelidparent,$path,$element->titre,$alias,$description,$idMaxUserJoomla[0]->idmax,$element->date,$element->maj);
+        insertRubriques($bdJoomla,$prefixeJoomla,$nouvelid,$nouvelidparent,$path,$element->titre,$alias,$description,$idMaxUserJoomla[0]->idmax,$element->date,$element->maj);
     }
 
 
@@ -177,7 +177,7 @@
         
         $listarticles .= '<tr>'.'<td>'.$element->id_article.'</td><td>'.$nouvelid.'</td><td>'.$element->titre."</td><td>".$alias."</td><td>".$element->id_rubrique."</td><td>".$nouvelidRub."</td><td>".$texte."</td><td>".$element->date."</td><td>".$element->visites."</td><td>".$element->date_modif.'</td></tr>' ;
         
-        //insertArticles($bdJoomla,$prefixeJoomla,$nouvelid,$element->titre,$alias,$texte,$nouvelidRub,$element->date,$idMaxUserJoomla[0]->idmax,$element->visites,$element->date_modif);
+        insertArticles($bdJoomla,$prefixeJoomla,$nouvelid,$element->titre,$alias,$texte,$nouvelidRub,$element->date,$idMaxUserJoomla[0]->idmax,$element->visites,$element->date_modif);
     }
 
     /* Documents non utilises */
@@ -192,7 +192,7 @@
         $taillegagne += $element->taille;
         $path='../'.$dossierJoomla.'/images/'.$element->fichier;
         if(file_exists($path)==true){
-            unlink($path);
+            //unlink($path);
         }
         
         $listDocumentsNonLies .= '<tr>'.'<td>'.$element->id_document.'</td><td>'.$element->fichier.'</td></tr>' ;  
@@ -221,6 +221,7 @@
                     echo $messageJoomla;
                 ?>
             </div>
+            <h2 id="recap">Récapitulatif de l'importation</h2>
             <ul class="nav nav-tabs">
                 <li class="active"><a data-toggle="tab" href="#auteurs">Auteurs</a></li>
                 <li><a data-toggle="tab" href="#rubriques">Rubriques</a></li>
@@ -229,7 +230,6 @@
             </ul>
             <div class="col-lg-12 tab-content">
                 <div id="auteurs" class="tab-pane fade in active">
-                    <h3>Id max des utilisateurs Joomla : <?php echo $idMaxUserJoomla[0]->idmax ?></h3>
                     <h2>Auteurs SPIP</h2>
                     <table class="table table-bordered table-striped">
                         <tbody>
@@ -248,7 +248,6 @@
                    </table>
                 </div>
                 <div id="rubriques" class="tab-pane fade">
-                    <h3>Id max des catégories Joomla : <?php echo $idMaxCategJoomla[0]->idmax ?></h3>
                     <h2>Rubriques SPIP</h2>
                     <table class="table table-bordered table-striped">
                         <tbody>
@@ -271,7 +270,6 @@
                    </table>
                 </div>
                 <div id="articles" class="tab-pane fade">
-                    <h3>Id max des articles Joomla : <?php echo $idMaxArticleJoomla[0]->idmax ?></h3>
                     <h2>Articles SPIP</h2>
                     <table class="table table-bordered table-striped">
                         <tbody>
@@ -294,8 +292,8 @@
                    </table>
                 </div>
                 <div id="documentsNonLies" class="tab-pane fade">
+                    <h3>Espace gagné : <?php echo $taillegagne ?> Mo</h3>
                     <h2>Documents non liés</h2>
-                    <p>Taille théorique gagné : <?php echo $taillegagne ?> Mo</p>
                     <table class="table table-bordered table-striped">
                         <tbody>
                             <tr>
